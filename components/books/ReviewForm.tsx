@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// components/books/ReviewForm.tsx
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { FiStar } from 'react-icons/fi';
@@ -15,6 +16,60 @@ export default function ReviewForm({ bookId, onSuccess }: ReviewFormProps) {
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingReview, setExistingReview] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      checkExistingReview();
+    }
+  }, [user, bookId]);
+
+  const checkExistingReview = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('book_id', bookId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      if (data) {
+        setExistingReview(data);
+        setRating(data.rating);
+        setComment(data.comment || '');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification des avis existants :', error);
+    }
+  };
+
+  const importBookIfNeeded = async (googleBookId: string) => {
+    try {
+      const response = await fetch('/api/import-book', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ googleBookId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Import API responded with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.book_id;
+    } catch (error) {
+      console.error('Error importing book:', error);
+      throw error;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,20 +88,8 @@ export default function ReviewForm({ bookId, onSuccess }: ReviewFormProps) {
     setError(null);
     
     try {
-      // Vérifier si l'utilisateur a déjà laissé un avis
-      const { data: existingReview, error: fetchError } = await supabase
-        .from('reviews')
-        .select('review_id')
-        .eq('user_id', user.id)
-        .eq('book_id', bookId)
-        .single();
-      
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        throw fetchError;
-      }
-      
       if (existingReview) {
-        // Mettre à jour l'avis existant
+        // Mise à jour d'un avis existant
         const { error: updateError } = await supabase
           .from('reviews')
           .update({
@@ -58,7 +101,7 @@ export default function ReviewForm({ bookId, onSuccess }: ReviewFormProps) {
         
         if (updateError) throw updateError;
       } else {
-        // Créer un nouvel avis
+        // Création d'un nouvel avis
         const { error: insertError } = await supabase
           .from('reviews')
           .insert({
@@ -72,13 +115,16 @@ export default function ReviewForm({ bookId, onSuccess }: ReviewFormProps) {
         if (insertError) throw insertError;
       }
       
-      // Réinitialiser le formulaire
-      setRating(0);
-      setComment('');
       onSuccess();
-    } catch (err) {
-      console.error('Erreur lors de l\'enregistrement de l\'avis :', err);
-      setError('Une erreur est survenue lors de l\'enregistrement de votre avis');
+      
+      if (!existingReview) {
+        // Réinitialiser le formulaire seulement pour un nouvel avis
+        setRating(0);
+        setComment('');
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de l\'enregistrement de l\'avis :', error);
+      setError(error.message || 'Une erreur est survenue lors de l\'enregistrement de votre avis');
     } finally {
       setLoading(false);
     }
@@ -96,7 +142,9 @@ export default function ReviewForm({ bookId, onSuccess }: ReviewFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm p-4 border">
-      <h3 className="font-semibold mb-4">Laisser un avis</h3>
+      <h3 className="font-semibold mb-4">
+        {existingReview ? 'Modifier votre avis' : 'Laisser un avis'}
+      </h3>
       
       {error && (
         <div className="bg-red-50 text-red-700 p-3 rounded-md mb-4">
@@ -150,7 +198,7 @@ export default function ReviewForm({ bookId, onSuccess }: ReviewFormProps) {
         className="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition"
         disabled={loading}
       >
-        {loading ? 'Envoi en cours...' : 'Publier'}
+        {loading ? 'Envoi en cours...' : existingReview ? 'Mettre à jour' : 'Publier'}
       </button>
     </form>
   );

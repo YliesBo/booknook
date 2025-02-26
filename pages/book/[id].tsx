@@ -288,15 +288,15 @@ export default function BookDetail() {
             )}
             
             {activeTab === 'reviews' && (
-              <div>
-                <h2 className="font-semibold mb-4">Avis des lecteurs</h2>
-                <ReviewList bookId={book.book_id} refreshTrigger={refreshReviews} />
-                
-                <div className="mt-8">
-                  <ReviewForm bookId={book.book_id} onSuccess={handleReviewSuccess} />
-                </div>
-              </div>
-            )}
+  <div>
+    <h2 className="font-semibold mb-4">Avis des lecteurs</h2>
+    <ReviewList bookId={book.book_id} refreshTrigger={refreshReviews} />
+    
+    <div className="mt-8">
+      <ReviewForm bookId={book.book_id} onSuccess={() => setRefreshReviews(prev => prev + 1)} />
+    </div>
+  </div>
+)}
             
             {activeTab === 'similar' && (
               <div>

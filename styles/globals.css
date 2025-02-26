@@ -14,8 +14,16 @@
   }
 }
 
+@media (hover: none) {
+  /* Ceci ne s'applique qu'aux appareils sans capacité de survol (tactiles) */
+  .touch-long-press {
+    touch-action: none; /* Empêche le défilement pendant un long press */
+  }
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+

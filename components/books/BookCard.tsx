@@ -1,129 +1,177 @@
-import { useState } from 'react';
+// components/books/BookCard.tsx
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase/supabaseClient';
+import { FiPlus } from 'react-icons/fi';
+import ShelfSelector from '../shelves/ShelfSelector';
 
 type BookCardProps = {
   book: {
-    book_id: string;
+    id: string;
     title: string;
+    authors: string[];
     thumbnail: string | null;
-    authors: { author_name: string }[];
+    source?: 'database' | 'google_books';
   };
+  onImport?: (id: string) => Promise<void>;
 };
 
-export default function BookCard({ book }: BookCardProps) {
-  const { user } = useAuth();
-  const [showOptions, setShowOptions] = useState(false);
+export default function BookCard({ book, onImport }: BookCardProps) {
+  const [showShelfSelector, setShowShelfSelector] = useState(false);
+  const [showAddButton, setShowAddButton] = useState(false);
+  const [longPressTriggered, setLongPressTriggered] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // Extraire les noms des auteurs
-  const authorNames = book.authors?.map(author => author.author_name).join(', ') || 'Auteur inconnu';
-  
-  // Fallback pour les livres sans thumbnail
-  const thumbnailUrl = book.thumbnail || '/images/book-placeholder.png';
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  const handleAddToShelf = async (shelfName: string) => {
-    if (!user) return;
-    
-    setLoading(true);
-    try {
-      // D'abord, on récupère l'ID de l'étagère
-      const { data: shelves, error: shelfError } = await supabase
-        .from('shelves')
-        .select('shelf_id')
-        .eq('user_id', user.id)
-        .eq('shelf_name', shelfName)
-        .single();
+  // Gestion du survol (desktop)
+  const handleMouseEnter = () => {
+    setShowAddButton(true);
+  };
 
-      if (shelfError || !shelves) {
-        console.error('Erreur lors de la récupération de l\'étagère :', shelfError);
-        return;
+  const handleMouseLeave = () => {
+    setShowAddButton(false);
+  };
+
+  // Gestion du long press (mobile)
+  const handleTouchStart = () => {
+    longPressTimer.current = setTimeout(() => {
+      setLongPressTriggered(true);
+      setShowShelfSelector(true);
+    }, 500); // 500ms pour déclencher un "long press"
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchMove = () => {
+    // Annuler le long press si l'utilisateur fait glisser son doigt
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Annuler la navigation si un long press a été déclenché
+  const handleLinkClick = (e: React.MouseEvent) => {
+    if (longPressTriggered) {
+      e.preventDefault();
+      setLongPressTriggered(false);
+    }
+  };
+
+  // S'assurer de nettoyer le timer si le composant est démonté
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
       }
+    };
+  }, []);
 
-      // Ensuite, on ajoute le livre à l'étagère
-      const { error } = await supabase
-        .from('bookshelves')
-        .upsert({
-          shelf_id: shelves.shelf_id,
-          book_id: book.book_id,
-          user_id: user.id,
-        });
-
-      if (error) {
-        console.error('Erreur lors de l\'ajout du livre à l\'étagère :', error);
+  // Fermer le sélecteur d'étagère quand on clique à l'extérieur
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
+        setShowShelfSelector(false);
       }
-    } catch (error) {
-      console.error('Erreur :', error);
-    } finally {
-      setLoading(false);
-      setShowOptions(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Gérer l'import des livres de Google Books
+  const handleAddButtonClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (book.source === 'google_books' && onImport) {
+      setLoading(true);
+      try {
+        await onImport(book.id);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setShowShelfSelector(true);
     }
   };
 
   return (
     <div 
+      ref={cardRef}
       className="relative group rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
-      onMouseEnter={() => setShowOptions(true)}
-      onMouseLeave={() => setShowOptions(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      <Link href={`/book/${book.book_id}`}>
-        <div className="aspect-[2/3] relative">
-          <Image 
-            src={thumbnailUrl}
-            alt={book.title}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 20vw"
-            className="object-cover"
-            onError={(e) => {
-              // Fallback en cas d'erreur de chargement d'image
-              const target = e.target as HTMLImageElement;
-              target.src = '/images/book-placeholder.png';
-            }}
-          />
+      <Link 
+        href={book.source === 'google_books' ? '#' : `/book/${book.id}`}
+        onClick={handleLinkClick}
+      >
+        <div 
+          className="aspect-[2/3] bg-gray-200 relative"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchMove={handleTouchMove}
+        >
+          {book.thumbnail && (
+            <img 
+              src={book.thumbnail} 
+              alt={book.title}
+              className="object-cover w-full h-full"
+            />
+          )}
+          
+          {/* Badge pour Google Books */}
+          {book.source === 'google_books' && (
+            <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 m-1 rounded-md">
+              Google Books
+            </div>
+          )}
+          
+          {/* Overlay avec bouton d'ajout (visible au survol sur desktop) */}
+          <div 
+            className={`absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-all duration-200 ${
+              showAddButton ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {!showShelfSelector && (
+              <button
+                onClick={handleAddButtonClick}
+                className="bg-blue-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+              >
+                {loading ? (
+                  <div className="animate-spin h-5 w-5 border-t-2 border-b-2 border-white rounded-full"></div>
+                ) : (
+                  <FiPlus size={20} />
+                )}
+              </button>
+            )}
+          </div>
         </div>
         <div className="p-2">
           <h3 className="font-medium text-sm line-clamp-1">{book.title}</h3>
-          <p className="text-xs text-gray-600 line-clamp-1">{authorNames}</p>
+          <p className="text-xs text-gray-600 line-clamp-1">
+            {book.authors.length > 0 
+              ? book.authors.join(', ') 
+              : 'Auteur inconnu'}
+          </p>
         </div>
       </Link>
 
-      {/* Options au survol (pour desktop) */}
-      {user && showOptions && (
-        <div className="absolute bottom-0 left-0 right-0 bg-white bg-opacity-90 p-2 transform transition-transform duration-200 shadow-lg">
-          {loading ? (
-            <div className="flex justify-center py-2">
-              <div className="animate-spin h-5 w-5 border-t-2 border-blue-500"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-1 text-xs">
-              <button 
-                onClick={() => handleAddToShelf('To Read')}
-                className="bg-blue-500 text-white py-1 px-2 rounded hover:bg-blue-600"
-              >
-                À lire
-              </button>
-              <button 
-                onClick={() => handleAddToShelf('Reading')}
-                className="bg-green-500 text-white py-1 px-2 rounded hover:bg-green-600"
-              >
-                En cours
-              </button>
-              <button 
-                onClick={() => handleAddToShelf('On Hold')}
-                className="bg-yellow-500 text-white py-1 px-2 rounded hover:bg-yellow-600"
-              >
-                En pause
-              </button>
-              <button 
-                onClick={() => handleAddToShelf('Read')}
-                className="bg-purple-500 text-white py-1 px-2 rounded hover:bg-purple-600"
-              >
-                Lu
-              </button>
-            </div>
-          )}
+      {/* Sélecteur d'étagères (s'affiche quand showShelfSelector est true) */}
+      {showShelfSelector && (
+        <div className="absolute z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+          <ShelfSelector 
+            bookId={book.id} 
+            onClose={() => setShowShelfSelector(false)}
+          />
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+// components/shelves/ShelfSelector.tsx
 import { useState, useEffect, useRef } from 'react';
 import { FiBookmark, FiCheck, FiPlus } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase/supabaseClient';

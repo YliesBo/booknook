@@ -1,24 +1,14 @@
+// components/books/ReviewList.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase/supabaseClient';
-import { FiStar } from 'react-icons/fi';
+import { FiStar, FiUser } from 'react-icons/fi';
 
-// Type qui représente la structure exacte retournée par Supabase
-interface SupabaseReview {
-  review_id: string;
-  rating: number;
-  comment: string;
-  created_at: string;
-  users: {
-    username: string;
-  };
-}
-
-// Type pour notre modèle simplifié après transformation
 type Review = {
   review_id: string;
   rating: number;
   comment: string;
   created_at: string;
+  updated_at: string | null;
   username: string;
 };
 
@@ -40,7 +30,7 @@ export default function ReviewList({ bookId, refreshTrigger }: ReviewListProps) 
   const fetchReviews = async () => {
     setLoading(true);
     try {
-      // Récupérer les avis avec jointure vers users
+      // Récupérer les avis
       const { data, error } = await supabase
         .from('reviews')
         .select(`
@@ -48,37 +38,47 @@ export default function ReviewList({ bookId, refreshTrigger }: ReviewListProps) 
           rating,
           comment,
           created_at,
-          users(username)
+          updated_at,
+          user_id
         `)
         .eq('book_id', bookId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
-      // Pour déboguer la structure exacte retournée
-      console.log('Structure Supabase retournée:', data?.[0]);
       
-      // Transformation des données en notre modèle Review
-      const transformedReviews: Review[] = (data || []).map(item => {
-        // Utilisons une approche plus sûre pour accéder aux données
-        return {
-          review_id: item.review_id,
-          rating: item.rating,
-          comment: item.comment,
-          created_at: item.created_at,
-          username: item.users && typeof item.users === 'object' && 'username' in item.users 
-            ? String(item.users.username) 
-            : 'Utilisateur anonyme'
-        };
-      });
+      // Si aucun avis, retourner
+      if (!data || data.length === 0) {
+        setReviews([]);
+        setTotalReviews(0);
+        setAverageRating(null);
+        setLoading(false);
+        return;
+      }
       
-      setReviews(transformedReviews);
-      setTotalReviews(transformedReviews.length);
+      // Pour chaque avis, récupérer le nom d'utilisateur
+      const reviewsWithUsernames = await Promise.all(
+        data.map(async (review) => {
+          // Récupérer les informations utilisateur
+          const { data: userData } = await supabase
+            .from('users')
+            .select('username')
+            .eq('user_id', review.user_id)
+            .single();
+            
+          return {
+            ...review,
+            username: userData?.username || 'Utilisateur anonyme'
+          };
+        })
+      );
+      
+      setReviews(reviewsWithUsernames);
+      setTotalReviews(reviewsWithUsernames.length);
       
       // Calculer la note moyenne
-      if (transformedReviews.length > 0) {
-        const sum = transformedReviews.reduce((acc, review) => acc + review.rating, 0);
-        setAverageRating(parseFloat((sum / transformedReviews.length).toFixed(1)));
+      if (reviewsWithUsernames.length > 0) {
+        const sum = reviewsWithUsernames.reduce((acc, review) => acc + review.rating, 0);
+        setAverageRating(parseFloat((sum / reviewsWithUsernames.length).toFixed(1)));
       } else {
         setAverageRating(null);
       }
@@ -132,10 +132,20 @@ export default function ReviewList({ bookId, refreshTrigger }: ReviewListProps) 
       {reviews.length > 0 ? (
         <div className="space-y-6">
           {reviews.map((review) => (
-            <div key={review.review_id} className="border-b pb-6">
+            <div key={review.review_id} className="bg-white p-4 rounded-lg shadow-sm border">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-medium">{review.username}</div>
-                <div className="text-gray-500 text-sm">{formatDate(review.created_at)}</div>
+                <div className="flex items-center">
+                  <div className="bg-gray-200 rounded-full p-2 mr-2">
+                    <FiUser className="text-gray-500" />
+                  </div>
+                  <div className="font-medium">{review.username}</div>
+                </div>
+                <div className="text-gray-500 text-sm">
+                  {formatDate(review.created_at)}
+                  {review.updated_at && review.updated_at !== review.created_at && 
+                    ' (modifié)'
+                  }
+                </div>
               </div>
               
               <div className="flex text-yellow-400 mb-2">
@@ -147,16 +157,20 @@ export default function ReviewList({ bookId, refreshTrigger }: ReviewListProps) 
                 ))}
               </div>
               
-              {review.comment && (
+              {review.comment ? (
                 <p className="text-gray-700">{review.comment}</p>
+              ) : (
+                <p className="text-gray-500 italic">Aucun commentaire</p>
               )}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-gray-500 italic py-8 text-center">
-          Aucun avis pour ce livre. Soyez le premier à donner votre avis !
-        </p>
+        <div className="bg-white p-6 rounded-lg shadow-sm border text-center">
+          <p className="text-gray-500 italic">
+            Aucun avis pour ce livre. Soyez le premier à donner votre avis !
+          </p>
+        </div>
       )}
     </div>
   );

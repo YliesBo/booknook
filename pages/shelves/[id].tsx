@@ -1,184 +1,228 @@
+// pages/shelves/[id].tsx
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabase/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
+import { useProtectedRoute } from '../../lib/hooks/useProtectedRoute';
 import Link from 'next/link';
-import { FiSearch } from 'react-icons/fi';
+import { FiArrowLeft, FiTrash2 } from 'react-icons/fi';
 
-// Types simplifiés
-type Book = {
+type ShelfBook = {
   book_id: string;
   title: string;
   thumbnail: string | null;
   authorNames: string[];
+  date_added: string;
 };
 
-export default function Search() {
+type ShelfDetails = {
+  shelf_id: string;
+  shelf_name: string;
+  is_system: boolean;
+};
+
+export default function ShelfDetail() {
   const router = useRouter();
-  const { q } = router.query;
-  const [searchQuery, setSearchQuery] = useState(q as string || '');
-  const [books, setBooks] = useState<Book[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { id } = router.query;
+  const { user } = useAuth();
+  useProtectedRoute();
+  
+  const [shelf, setShelf] = useState<ShelfDetails | null>(null);
+  const [books, setBooks] = useState<ShelfBook[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (q) {
-      setSearchQuery(q as string);
-      searchBooks(q as string);
+    if (user && id) {
+      fetchShelfDetails(id as string);
+      fetchShelfBooks(id as string);
     }
-  }, [q]);
+  }, [user, id]);
 
-  const searchBooks = async (query: string) => {
-    if (!query.trim()) return;
+  const fetchShelfDetails = async (shelfId: string) => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('shelves')
+        .select('shelf_id, shelf_name, is_system')
+        .eq('user_id', user.id)
+        .eq('shelf_id', shelfId)
+        .single();
+
+      if (error) throw error;
+      setShelf(data);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des détails de l\'étagère :', error);
+      router.push('/shelves');
+    }
+  };
+
+  const fetchShelfBooks = async (shelfId: string) => {
+    if (!user) return;
     
     setLoading(true);
     try {
-      // Rechercher les livres
-      const { data: booksData, error } = await supabase
-        .from('books')
-        .select('book_id, title, thumbnail')
-        .ilike('title', `%${query}%`)
-        .limit(20);
+      const { data: bookshelvesData, error } = await supabase
+        .from('bookshelves')
+        .select('book_id, date_added')
+        .eq('user_id', user.id)
+        .eq('shelf_id', shelfId);
 
       if (error) throw error;
       
-      // Si aucun livre trouvé, retourner une liste vide
-      if (!booksData || booksData.length === 0) {
-        setBooks([]);
-        setLoading(false);
-        return;
-      }
+      // Pour chaque référence, récupérer les détails du livre
+      const booksDetails: ShelfBook[] = [];
       
-      // Récupérer les auteurs pour chaque livre
-      const searchResults: Book[] = [];
-      
-      for (const book of booksData) {
-        // Récupérer les auteurs liés à ce livre
-        const { data: authorsData } = await supabase
-          .from('book_authors')
-          .select('author_id')
-          .eq('book_id', book.book_id);
+      for (const item of bookshelvesData || []) {
+        // Récupérer les infos du livre
+        const { data: bookData } = await supabase
+          .from('books')
+          .select('book_id, title, thumbnail')
+          .eq('book_id', item.book_id)
+          .single();
         
-        const authorNames: string[] = [];
-        
-        // Récupérer les noms des auteurs
-        if (authorsData && authorsData.length > 0) {
-          for (const authorEntry of authorsData) {
+        if (bookData) {
+          // Récupérer les auteurs du livre
+          const { data: authorsData } = await supabase
+            .from('book_authors')
+            .select('author_id')
+            .eq('book_id', item.book_id);
+          
+          const authorNames: string[] = [];
+          for (const authorEntry of authorsData || []) {
             const { data: authorData } = await supabase
               .from('authors')
               .select('author_name')
               .eq('author_id', authorEntry.author_id)
               .single();
             
-            if (authorData && authorData.author_name) {
+            if (authorData?.author_name) {
               authorNames.push(authorData.author_name);
             }
           }
+          
+          booksDetails.push({
+            book_id: bookData.book_id,
+            title: bookData.title,
+            thumbnail: bookData.thumbnail,
+            authorNames,
+            date_added: item.date_added
+          });
         }
-        
-        searchResults.push({
-          book_id: book.book_id,
-          title: book.title,
-          thumbnail: book.thumbnail,
-          authorNames
-        });
       }
       
-      setBooks(searchResults);
+      setBooks(booksDetails);
     } catch (error) {
-      console.error('Erreur lors de la recherche :', error);
-      setBooks([]);
+      console.error('Erreur lors de la récupération des livres :', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+  const removeBookFromShelf = async (bookId: string) => {
+    if (!user || !id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('bookshelves')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('shelf_id', id)
+        .eq('book_id', bookId);
+
+      if (error) throw error;
+      
+      // Mettre à jour la liste des livres
+      setBooks(books.filter(book => book.book_id !== bookId));
+    } catch (error) {
+      console.error('Erreur lors de la suppression du livre :', error);
     }
   };
 
+  if (loading && !shelf) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!shelf) {
+    return (
+      <div className="max-w-4xl mx-auto py-10 px-4">
+        <h1 className="text-2xl font-bold text-center">Étagère non trouvée</h1>
+        <p className="text-center mt-4">
+          <Link href="/shelves" className="text-blue-600 hover:underline">
+            Retour à mes étagères
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-4xl mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-6">Recherche</h1>
+    <div className="max-w-4xl mx-auto py-6 px-4">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center">
+          <Link href="/shelves" className="text-gray-600 hover:text-gray-900 mr-3">
+            <FiArrowLeft size={20} />
+          </Link>
+          <h1 className="text-2xl font-bold">{shelf.shelf_name}</h1>
+          <span className="ml-2 text-gray-500">
+            {books.length} livre{books.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </div>
       
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher des livres, des auteurs..."
-            className="w-full p-3 pl-10 text-gray-700 bg-white border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiSearch className="text-gray-400" />
-          </div>
-          <button
-            type="submit"
-            className="absolute right-2 top-2 bg-blue-500 text-white px-4 py-1 rounded-full hover:bg-blue-600"
-          >
-            Rechercher
-          </button>
+      {loading ? (
+        <div className="flex justify-center my-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
-      </form>
-
-      {/* Suggestions de recherche (genres, etc.) */}
-      {!q && (
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-lg text-white">
-            <h3 className="font-bold mb-2">Rechercher par genre</h3>
-            <p className="text-sm">Explorez des livres par catégorie</p>
-          </div>
-          <div className="bg-gradient-to-r from-green-500 to-teal-500 p-4 rounded-lg text-white">
-            <h3 className="font-bold mb-2">Rechercher par ambiance</h3>
-            <p className="text-sm">Trouvez des livres selon votre humeur</p>
-          </div>
-        </div>
-      )}
-
-      {/* Résultats de recherche */}
-      {q && (
+      ) : (
         <div>
-          <h2 className="text-xl font-semibold mb-4">
-            Résultats pour "{q}"
-          </h2>
-          
-          {loading ? (
-            <div className="flex justify-center my-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          {books.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {books.map((book) => (
+                <div key={book.book_id} className="relative group rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+                  <Link href={`/book/${book.book_id}`}>
+                    <div className="aspect-[2/3] bg-gray-200 relative">
+                      {book.thumbnail && (
+                        <img 
+                          src={book.thumbnail} 
+                          alt={book.title}
+                          className="object-cover w-full h-full"
+                        />
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <h3 className="font-medium text-sm line-clamp-1">{book.title}</h3>
+                      <p className="text-xs text-gray-600 line-clamp-1">
+                        {book.authorNames.length > 0 
+                          ? book.authorNames.join(', ') 
+                          : 'Auteur inconnu'}
+                      </p>
+                    </div>
+                  </Link>
+                  
+                  {/* Bouton de suppression au survol */}
+                  <button
+                    className="absolute top-0 right-0 p-1 m-2 bg-black bg-opacity-50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => removeBookFromShelf(book.book_id)}
+                    title="Retirer de l'étagère"
+                  >
+                    <FiTrash2 size={16} />
+                  </button>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {books.length > 0 ? (
-                books.map((book) => (
-                  <div key={book.book_id} className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                    <Link href={`/book/${book.book_id}`}>
-                      <div className="aspect-[2/3] bg-gray-200 relative">
-                        {book.thumbnail && (
-                          <img 
-                            src={book.thumbnail} 
-                            alt={book.title}
-                            className="object-cover w-full h-full"
-                          />
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <h3 className="font-medium text-sm line-clamp-1">{book.title}</h3>
-                        <p className="text-xs text-gray-600 line-clamp-1">
-                          {book.authorNames.length > 0 
-                            ? book.authorNames.join(', ') 
-                            : 'Auteur inconnu'}
-                        </p>
-                      </div>
-                    </Link>
-                  </div>
-                ))
-              ) : (
-                <p className="col-span-full text-center text-gray-500 my-12">
-                  Aucun livre trouvé pour "{q}".
-                </p>
-              )}
+            <div className="text-center py-10 bg-white rounded-lg shadow-md">
+              <p className="text-gray-500">
+                Cette étagère est vide. Ajoutez des livres pour commencer !
+              </p>
+              <Link href="/" className="mt-4 inline-block text-blue-600 hover:underline">
+                Parcourir des livres
+              </Link>
             </div>
           )}
         </div>
