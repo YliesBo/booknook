@@ -92,6 +92,8 @@ export default async function handler(
     // Traiter la langue
     let languageId = null;
     if (bookDetails.volumeInfo.language) {
+      console.log('Processing language:', bookDetails.volumeInfo.language);
+      
       // Vérifier si la langue existe déjà
       const { data: existingLanguage, error: languageError } = await supabase
         .from('languages')
@@ -102,14 +104,18 @@ export default async function handler(
       if (languageError) {
         console.error('Error checking language:', languageError);
       } else if (existingLanguage) {
+        console.log('Existing language found:', existingLanguage);
         languageId = existingLanguage.language_id;
       } else {
         // Créer une nouvelle langue
+        const languageName = getLanguageName(bookDetails.volumeInfo.language);
+        console.log('Creating new language:', bookDetails.volumeInfo.language, languageName);
+        
         const { data: newLanguage, error: createLanguageError } = await supabase
           .from('languages')
           .insert({ 
             language_code: bookDetails.volumeInfo.language,
-            language_name: getLanguageName(bookDetails.volumeInfo.language)
+            language_name: languageName
           })
           .select()
           .single();
@@ -117,13 +123,15 @@ export default async function handler(
         if (createLanguageError) {
           console.error('Error creating language:', createLanguageError);
         } else if (newLanguage) {
+          console.log('New language created:', newLanguage);
           languageId = newLanguage.language_id;
+        } else {
+          console.error('Language created but no data returned');
         }
       }
     }
 
     // Vérifier si le livre appartient à une série (information pas toujours disponible dans Google Books API)
-    // Note: Ceci est une approximation, car Google Books API ne structure pas toujours clairement ces informations
     let seriesId = null;
     let seriesReleaseNumber = null;
     
@@ -159,41 +167,10 @@ export default async function handler(
       seriesReleaseNumber = seriesInfo.releaseNumber;
     }
 
+    // Log pour debug
+    console.log('Creating book with language_id:', languageId);
+
     // Créer le livre avec toutes les informations recueillies
-    if (bookDetails.volumeInfo.language) {
-      // Vérifier si la langue existe déjà dans la table languages
-      const { data: existingLanguage, error: languageError } = await supabase
-        .from('languages')
-        .select('language_id')
-        .eq('language_code', bookDetails.volumeInfo.language)
-        .single();
-    
-      if (languageError && languageError.code !== 'PGRST116') { // PGRST116 = not found
-        console.warn('Erreur lors de la recherche de la langue:', languageError);
-      }
-    
-      let languageId = null;
-      
-      if (existingLanguage) {
-        languageId = existingLanguage.language_id;
-      } else {
-        // Créer une nouvelle entrée dans la table languages
-        const { data: newLanguage, error: createLanguageError } = await supabase
-          .from('languages')
-          .insert({ 
-            language_code: bookDetails.volumeInfo.language,
-            language_name: getLanguageName(bookDetails.volumeInfo.language) // Fonction à définir ci-dessous
-          })
-          .select()
-          .single();
-    
-        if (createLanguageError) {
-          console.error('Erreur lors de la création de la langue:', createLanguageError);
-        } else if (newLanguage) {
-          languageId = newLanguage.language_id;
-        }
-      }
-      
     const { data: newBook, error: bookError } = await supabase
       .from('books')
       .insert({
@@ -367,10 +344,29 @@ function getLanguageName(languageCode: string): string {
     'ja': 'Japanese',
     'zh': 'Chinese',
     'ar': 'Arabic',
-    // Ajoutez d'autres langues selon vos besoins
+    'nl': 'Nederlands',
+    'sv': 'Svenska',
+    'fi': 'Suomi',
+    'da': 'Dansk',
+    'no': 'Norsk',
+    'pl': 'Polski',
+    'hu': 'Magyar',
+    'cs': 'Čeština',
+    'ro': 'Română',
+    'tr': 'Türkçe',
+    'ko': 'Korean',
+    'he': 'Hebrew',
+    'id': 'Indonesian',
+    'vi': 'Vietnamese',
+    'uk': 'Ukrainian',
+    'th': 'Thai',
+    'el': 'Greek',
+    'ca': 'Catalan',
+    'fa': 'Persian',
+    'hi': 'Hindi'
   };
 
-  return languageMap[languageCode] || languageCode;
+  return languageMap[languageCode] || `Language (${languageCode})`;
 }
 
 // Fonction pour extraire les informations de série du titre ou sous-titre

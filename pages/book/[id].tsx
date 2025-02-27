@@ -63,17 +63,22 @@ export default function BookDetail() {
         `)
         .eq('book_id', bookId)
         .single();
-
-      if (bookError) throw bookError;
-
+  
+      if (bookError) {
+        console.error('Erreur lors de la récupération du livre:', bookError);
+        throw bookError;
+      }
+  
+      console.log('Book data received:', bookData);
+  
       // Récupérer les auteurs
       const { data: authorsData, error: authorsError } = await supabase
         .from('book_authors')
         .select('author_id')
         .eq('book_id', bookId);
-
+  
       if (authorsError) throw authorsError;
-
+  
       // Récupérer les noms d'auteurs
       const authorNames: string[] = [];
       for (const authorEntry of authorsData || []) {
@@ -98,15 +103,15 @@ export default function BookDetail() {
           }
         }
       }
-
+  
       // Récupérer les genres
       const { data: genresData, error: genresError } = await supabase
         .from('books_genres')
         .select('genre_id')
         .eq('book_id', bookId);
-
+  
       if (genresError) throw genresError;
-
+  
       // Récupérer les noms de genres
       const genres: string[] = [];
       for (const genreEntry of genresData || []) {
@@ -122,7 +127,7 @@ export default function BookDetail() {
           }
         }
       }
-
+  
       // Récupérer l'éditeur
       let publisher: string | null = null;
       if (bookData.publisher_id) {
@@ -139,17 +144,26 @@ export default function BookDetail() {
       
       // Récupérer la langue
       let language = null;
-    if (bookData.language_id) {
-      const { data: languageData, error: languageError } = await supabase
-        .from('languages')
-        .select('language_name')
-        .eq('language_id', bookData.language_id)
-        .single();
-      
-      if (!languageError && languageData) {
-        language = languageData.language_name;
+      if (bookData.language_id) {
+        console.log('Language ID found:', bookData.language_id);
+        
+        const { data: languageData, error: languageError } = await supabase
+          .from('languages')
+          .select('language_name')
+          .eq('language_id', bookData.language_id)
+          .single();
+        
+        if (languageError) {
+          console.error('Erreur lors de la récupération de la langue:', languageError);
+        } else if (languageData) {
+          console.log('Language data found:', languageData);
+          language = languageData.language_name;
+        } else {
+          console.warn('No language data found with ID:', bookData.language_id);
+        }
+      } else {
+        console.warn('No language_id in book data');
       }
-    }
       
       // Récupérer la série
       let series: string | null = null;
@@ -183,6 +197,7 @@ export default function BookDetail() {
         series_release_number: bookData.series_release_number
       };
       
+      console.log('Final book detail object:', bookDetail);
       setBook(bookDetail);
     } catch (error) {
       console.error('Erreur lors de la récupération du livre :', error);
@@ -365,23 +380,6 @@ export default function BookDetail() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center mt-2 text-gray-600">
-  <span className="mr-4">
-    Par {book.authorNames.length > 0 ? book.authorNames.join(', ') : 'Auteur inconnu'}
-  </span>
-  
-  {book.published_date && (
-    <span className="mr-4">• {new Date(book.published_date).getFullYear()}</span>
-  )}
-  
-  {book.page_count && (
-    <span className="mr-4">• {book.page_count} pages</span>
-  )}
-  
-  {book.language && (
-    <span className="mr-4">• {book.language}</span>
-  )}
-</div>
               </div>
             )}
             
