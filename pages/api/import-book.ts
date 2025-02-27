@@ -27,7 +27,8 @@ export default async function handler(
       .single();
 
     if (existingError && existingError.code !== 'PGRST116') {
-      throw existingError;
+      console.error('Error checking existing book:', existingError);
+      return res.status(400).json({ error: `Database error: ${existingError.message}` });
     }
 
     if (existingBook) {
@@ -44,7 +45,155 @@ export default async function handler(
       return res.status(404).json({ error: 'Book not found in Google Books API' });
     }
 
-    // Ajouter le livre à la base de données
+    // Extraire les ISBN et autres identifiants
+    let isbn10 = null;
+    let isbn13 = null;
+    
+    if (bookDetails.volumeInfo.industryIdentifiers) {
+      for (const identifier of bookDetails.volumeInfo.industryIdentifiers) {
+        if (identifier.type === 'ISBN_10') {
+          isbn10 = identifier.identifier;
+        } else if (identifier.type === 'ISBN_13') {
+          isbn13 = identifier.identifier;
+        }
+      }
+    }
+
+    // Traiter l'éditeur (publisher)
+    let publisherId = null;
+    if (bookDetails.volumeInfo.publisher) {
+      // Vérifier si l'éditeur existe déjà
+      const { data: existingPublisher, error: publisherError } = await supabase
+        .from('publishers')
+        .select('publisher_id')
+        .ilike('publisher_name', bookDetails.volumeInfo.publisher)
+        .maybeSingle();
+
+      if (publisherError) {
+        console.error('Error checking publisher:', publisherError);
+      } else if (existingPublisher) {
+        publisherId = existingPublisher.publisher_id;
+      } else {
+        // Créer un nouvel éditeur
+        const { data: newPublisher, error: createPublisherError } = await supabase
+          .from('publishers')
+          .insert({ publisher_name: bookDetails.volumeInfo.publisher })
+          .select()
+          .single();
+
+        if (createPublisherError) {
+          console.error('Error creating publisher:', createPublisherError);
+        } else if (newPublisher) {
+          publisherId = newPublisher.publisher_id;
+        }
+      }
+    }
+
+    // Traiter la langue
+    let languageId = null;
+    if (bookDetails.volumeInfo.language) {
+      // Vérifier si la langue existe déjà
+      const { data: existingLanguage, error: languageError } = await supabase
+        .from('languages')
+        .select('language_id')
+        .eq('language_code', bookDetails.volumeInfo.language)
+        .maybeSingle();
+
+      if (languageError) {
+        console.error('Error checking language:', languageError);
+      } else if (existingLanguage) {
+        languageId = existingLanguage.language_id;
+      } else {
+        // Créer une nouvelle langue
+        const { data: newLanguage, error: createLanguageError } = await supabase
+          .from('languages')
+          .insert({ 
+            language_code: bookDetails.volumeInfo.language,
+            language_name: getLanguageName(bookDetails.volumeInfo.language)
+          })
+          .select()
+          .single();
+
+        if (createLanguageError) {
+          console.error('Error creating language:', createLanguageError);
+        } else if (newLanguage) {
+          languageId = newLanguage.language_id;
+        }
+      }
+    }
+
+    // Vérifier si le livre appartient à une série (information pas toujours disponible dans Google Books API)
+    // Note: Ceci est une approximation, car Google Books API ne structure pas toujours clairement ces informations
+    let seriesId = null;
+    let seriesReleaseNumber = null;
+    
+    // Dans certains cas, le titre peut contenir des informations sur la série
+    const seriesInfo = extractSeriesInfo(bookDetails.volumeInfo.title, bookDetails.volumeInfo.subtitle);
+    if (seriesInfo.seriesName) {
+      // Vérifier si la série existe déjà
+      const { data: existingSeries, error: seriesError } = await supabase
+        .from('series')
+        .select('series_id')
+        .ilike('series_name', seriesInfo.seriesName)
+        .maybeSingle();
+
+      if (seriesError) {
+        console.error('Error checking series:', seriesError);
+      } else if (existingSeries) {
+        seriesId = existingSeries.series_id;
+      } else {
+        // Créer une nouvelle série
+        const { data: newSeries, error: createSeriesError } = await supabase
+          .from('series')
+          .insert({ series_name: seriesInfo.seriesName })
+          .select()
+          .single();
+
+        if (createSeriesError) {
+          console.error('Error creating series:', createSeriesError);
+        } else if (newSeries) {
+          seriesId = newSeries.series_id;
+        }
+      }
+      
+      seriesReleaseNumber = seriesInfo.releaseNumber;
+    }
+
+    // Créer le livre avec toutes les informations recueillies
+    if (bookDetails.volumeInfo.language) {
+      // Vérifier si la langue existe déjà dans la table languages
+      const { data: existingLanguage, error: languageError } = await supabase
+        .from('languages')
+        .select('language_id')
+        .eq('language_code', bookDetails.volumeInfo.language)
+        .single();
+    
+      if (languageError && languageError.code !== 'PGRST116') { // PGRST116 = not found
+        console.warn('Erreur lors de la recherche de la langue:', languageError);
+      }
+    
+      let languageId = null;
+      
+      if (existingLanguage) {
+        languageId = existingLanguage.language_id;
+      } else {
+        // Créer une nouvelle entrée dans la table languages
+        const { data: newLanguage, error: createLanguageError } = await supabase
+          .from('languages')
+          .insert({ 
+            language_code: bookDetails.volumeInfo.language,
+            language_name: getLanguageName(bookDetails.volumeInfo.language) // Fonction à définir ci-dessous
+          })
+          .select()
+          .single();
+    
+        if (createLanguageError) {
+          console.error('Erreur lors de la création de la langue:', createLanguageError);
+        } else if (newLanguage) {
+          languageId = newLanguage.language_id;
+        }
+      }
+      
     const { data: newBook, error: bookError } = await supabase
       .from('books')
       .insert({
@@ -53,115 +202,140 @@ export default async function handler(
         synopsis: bookDetails.volumeInfo.description || null,
         published_date: bookDetails.volumeInfo.publishedDate || null,
         page_count: bookDetails.volumeInfo.pageCount || null,
-        thumbnail: bookDetails.volumeInfo.imageLinks?.thumbnail || null
+        thumbnail: bookDetails.volumeInfo.imageLinks?.thumbnail || null,
+        isbn_10: isbn10,
+        isbn_13: isbn13,
+        publisher_id: publisherId,
+        language_id: languageId,
+        series_id: seriesId,
+        series_release_number: seriesReleaseNumber
       })
       .select()
       .single();
 
     if (bookError) {
-      throw bookError;
+      console.error('Error inserting book:', bookError);
+      return res.status(500).json({ error: `Failed to insert book: ${bookError.message}` });
     }
 
-    // Traitement des auteurs avec gestion d'erreur optimisée
-if (bookDetails.volumeInfo.authors && bookDetails.volumeInfo.authors.length > 0) {
-  for (const authorName of bookDetails.volumeInfo.authors) {
-    try {
-      // Vérifier si l'auteur existe déjà
-      let { data: existingAuthor, error: existingAuthorError } = await supabase
-        .from('authors')
-        .select('author_id')
-        .ilike('author_name', authorName)
-        .single();
+    // Traitement des auteurs...
+    if (bookDetails.volumeInfo.authors && bookDetails.volumeInfo.authors.length > 0) {
+      for (const authorName of bookDetails.volumeInfo.authors) {
+        try {
+          // Vérifier si l'auteur existe déjà
+          const { data: existingAuthors, error: authorSearchError } = await supabase
+            .from('authors')
+            .select('author_id')
+            .ilike('author_name', authorName)
+            .maybeSingle();
 
-      if (existingAuthorError && existingAuthorError.code !== 'PGRST116') { // PGRST116 = not found
-        console.warn('Erreur lors de la recherche de l\'auteur:', existingAuthorError);
-      }
+          if (authorSearchError) {
+            console.warn('Error searching author:', authorSearchError);
+            continue;
+          }
 
-      let authorId;
-      
-      if (existingAuthor) {
-        authorId = existingAuthor.author_id;
-      } else {
-        // Créer un nouvel auteur
-        const { data: newAuthor, error: authorError } = await supabase
-          .from('authors')
-          .insert({ author_name: authorName })
-          .select()
-          .single();
+          let authorId;
+          
+          if (existingAuthors) {
+            // Utiliser l'auteur trouvé
+            authorId = existingAuthors.author_id;
+          } else {
+            // Créer un nouvel auteur
+            const { data: newAuthor, error: authorInsertError } = await supabase
+              .from('authors')
+              .insert({ author_name: authorName })
+              .select()
+              .single();
 
-        if (authorError) {
-          console.error('Erreur lors de la création de l\'auteur:', authorError);
-          // On continue sans associer cet auteur
-          continue;
+            if (authorInsertError) {
+              console.error('Error creating author:', authorInsertError);
+              continue;
+            }
+            
+            if (!newAuthor) {
+              console.error('Author created but no data returned');
+              continue;
+            }
+            
+            authorId = newAuthor.author_id;
+          }
+
+          // Associer l'auteur au livre
+          if (authorId) {
+            const { error: linkError } = await supabase
+              .from('book_authors')
+              .insert({
+                book_id: newBook.book_id,
+                author_id: authorId
+              });
+
+            if (linkError) {
+              console.error('Error linking author to book:', linkError);
+            }
+          }
+        } catch (authorError) {
+          console.error(`Error processing author ${authorName}:`, authorError);
         }
-        authorId = newAuthor.author_id;
       }
-
-      // Associer l'auteur au livre
-      const { error: linkError } = await supabase
-        .from('book_authors')
-        .insert({
-          book_id: newBook.book_id,
-          author_id: authorId
-        });
-
-      if (linkError) {
-        console.error('Erreur lors de l\'association de l\'auteur au livre:', linkError);
-      }
-    } catch (error) {
-      console.error('Erreur lors du traitement de l\'auteur', authorName, ':', error);
     }
-  }
-}
 
-    // Traitement des genres/catégories avec gestion d'erreur optimisée
+    // Traitement des genres...
     if (bookDetails.volumeInfo.categories && bookDetails.volumeInfo.categories.length > 0) {
       for (const categoryName of bookDetails.volumeInfo.categories) {
         try {
           // Vérifier si le genre existe déjà
-          let { data: existingGenre, error: genreError } = await supabase
+          const { data: existingGenres, error: genreSearchError } = await supabase
             .from('genres')
             .select('genre_id')
             .ilike('genre_name', categoryName)
-            .single();
+            .maybeSingle();
 
-          if (genreError && genreError.code !== 'PGRST116') {
-            throw genreError;
+          if (genreSearchError) {
+            console.warn('Error searching genre:', genreSearchError);
+            continue;
           }
 
           let genreId;
           
-          if (existingGenre) {
-            genreId = existingGenre.genre_id;
+          if (existingGenres) {
+            // Utiliser le genre trouvé
+            genreId = existingGenres.genre_id;
           } else {
             // Créer un nouveau genre
-            const { data: newGenre, error: createGenreError } = await supabase
+            const { data: newGenre, error: genreInsertError } = await supabase
               .from('genres')
               .insert({ genre_name: categoryName })
               .select()
               .single();
 
-            if (createGenreError) {
-              throw createGenreError;
+            if (genreInsertError) {
+              console.error('Error creating genre:', genreInsertError);
+              continue;
+            }
+            
+            if (!newGenre) {
+              console.error('Genre created but no data returned');
+              continue;
             }
             
             genreId = newGenre.genre_id;
           }
 
           // Associer le genre au livre
-          const { error: linkGenreError } = await supabase
-            .from('books_genres')
-            .insert({
-              book_id: newBook.book_id,
-              genre_id: genreId
-            });
+          if (genreId) {
+            const { error: linkError } = await supabase
+              .from('books_genres')
+              .insert({
+                book_id: newBook.book_id,
+                genre_id: genreId
+              });
 
-          if (linkGenreError) {
-            throw linkGenreError;
+            if (linkError) {
+              console.error('Error linking genre to book:', linkError);
+            }
           }
         } catch (genreError) {
-          console.error(`Erreur lors du traitement du genre ${categoryName}:`, genreError);
-          // Continuer avec les autres genres même si une erreur se produit
+          console.error(`Error processing genre ${categoryName}:`, genreError);
         }
       }
     }
@@ -170,6 +344,7 @@ if (bookDetails.volumeInfo.authors && bookDetails.volumeInfo.authors.length > 0)
       book_id: newBook.book_id, 
       message: 'Book successfully imported' 
     });
+    
   } catch (error) {
     console.error('Import error:', error);
     return res.status(500).json({ 
@@ -177,4 +352,62 @@ if (bookDetails.volumeInfo.authors && bookDetails.volumeInfo.authors.length > 0)
       details: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
+}
+
+// Fonction d'aide pour obtenir le nom complet de la langue à partir du code
+function getLanguageName(languageCode: string): string {
+  const languageMap: Record<string, string> = {
+    'en': 'English',
+    'fr': 'Français',
+    'es': 'Español',
+    'de': 'Deutsch',
+    'it': 'Italiano',
+    'pt': 'Português',
+    'ru': 'Русский',
+    'ja': 'Japanese',
+    'zh': 'Chinese',
+    'ar': 'Arabic',
+    // Ajoutez d'autres langues selon vos besoins
+  };
+
+  return languageMap[languageCode] || languageCode;
+}
+
+// Fonction pour extraire les informations de série du titre ou sous-titre
+function extractSeriesInfo(title: string, subtitle?: string): { seriesName: string | null, releaseNumber: number | null } {
+  const result = { seriesName: null, releaseNumber: null };
+  
+  // Motifs courants dans les titres de séries
+  // Ex: "Harry Potter and the Prisoner of Azkaban (Harry Potter #3)"
+  // Ex: "Book Title - Series Name: Volume 2"
+  
+  // Chercher dans le titre
+  const seriesPatterns = [
+    /\((.*?)#(\d+\.?\d*)\)/i,          // (Series Name #1)
+    /\((.*?),?\s+(?:Book|Vol\.?|Volume|Tome|Part)\.?\s*(\d+\.?\d*)\)/i, // (Series Name, Book 1)
+    /(.*?)(?:Series|Saga|Trilogy|Duology):\s+(?:Book|Vol\.?|Volume|Tome|Part)\.?\s*(\d+\.?\d*)/i, // Series Name Series: Book 1
+    /^(.*?)\s+(\d+\.?\d*)$/i           // Series Name 1
+  ];
+
+  for (const pattern of seriesPatterns) {
+    // Chercher dans le titre
+    const titleMatch = title.match(pattern);
+    if (titleMatch && titleMatch[1] && titleMatch[2]) {
+      result.seriesName = titleMatch[1].trim();
+      result.releaseNumber = parseFloat(titleMatch[2]);
+      return result;
+    }
+    
+    // Chercher dans le sous-titre s'il existe
+    if (subtitle) {
+      const subtitleMatch = subtitle.match(pattern);
+      if (subtitleMatch && subtitleMatch[1] && subtitleMatch[2]) {
+        result.seriesName = subtitleMatch[1].trim();
+        result.releaseNumber = parseFloat(subtitleMatch[2]);
+        return result;
+      }
+    }
+  }
+
+  return result;
 }

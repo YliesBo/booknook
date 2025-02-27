@@ -39,7 +39,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
     longPressTimer.current = setTimeout(() => {
       setLongPressTriggered(true);
       setShowShelfSelector(true);
-    }, 500); // 500ms pour déclencher un "long press"
+    }, 500);
   };
 
   const handleTouchEnd = () => {
@@ -50,14 +50,12 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   };
 
   const handleTouchMove = () => {
-    // Annuler le long press si l'utilisateur fait glisser son doigt
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
   };
 
-  // Annuler la navigation si un long press a été déclenché
   const handleLinkClick = async (e: React.MouseEvent) => {
     if (longPressTriggered) {
       e.preventDefault();
@@ -71,6 +69,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
       setLoading(true);
       
       try {
+        // Tentative d'importation du livre
         const response = await fetch('/api/import-book', {
           method: 'POST',
           headers: {
@@ -79,24 +78,32 @@ export default function BookCard({ book, onImport }: BookCardProps) {
           body: JSON.stringify({ googleBookId: book.id }),
         });
         
+        // Traitement de la réponse
+        const data = await response.json();
+        
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Error ${response.status}`);
+          console.error('Import error:', data.error || 'Unknown error');
+          alert(`Erreur: ${data.error || 'Une erreur inconnue est survenue'}`);
+          setLoading(false);
+          return;
         }
         
-        const data = await response.json();
-        router.push(`/book/${data.book_id}`);
+        // Navigation vers la page de détail si l'importation est réussie
+        if (data.book_id) {
+          router.push(`/book/${data.book_id}`);
+        } else {
+          console.error('No book_id returned:', data);
+          alert('Erreur: Impossible de récupérer l\'ID du livre importé');
+          setLoading(false);
+        }
       } catch (error) {
-        console.error('Error importing book:', error);
-        // Option: Afficher une notification d'erreur à l'utilisateur
-        alert('Une erreur est survenue lors de l\'importation du livre. Veuillez réessayer.');
-      } finally {
+        console.error('Error during import process:', error);
+        alert('Une erreur est survenue lors de la communication avec le serveur');
         setLoading(false);
       }
     }
   };
 
-  // S'assurer de nettoyer le timer si le composant est démonté
   useEffect(() => {
     return () => {
       if (longPressTimer.current) {
@@ -105,7 +112,6 @@ export default function BookCard({ book, onImport }: BookCardProps) {
     };
   }, []);
 
-  // Fermer le sélecteur d'étagère quand on clique à l'extérieur
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
@@ -119,7 +125,6 @@ export default function BookCard({ book, onImport }: BookCardProps) {
     };
   }, []);
 
-  // Gérer l'ajout à une étagère
   const handleAddButtonClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -131,7 +136,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
         setShowShelfSelector(true);
       } catch (error) {
         console.error('Error importing book for shelf selection:', error);
-        alert('Une erreur est survenue lors de l\'importation du livre pour la sélection d\'étagère.');
+        alert('Une erreur est survenue lors de l\'importation du livre');
       } finally {
         setLoading(false);
       }
@@ -165,14 +170,12 @@ export default function BookCard({ book, onImport }: BookCardProps) {
             />
           )}
           
-          {/* Afficher un indicateur de chargement pendant l'importation */}
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
               <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
             </div>
           )}
           
-          {/* Overlay avec bouton d'ajout (visible au survol sur desktop) */}
           <div 
             className={`absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-all duration-200 ${
               showAddButton ? 'opacity-100' : 'opacity-0'
@@ -202,7 +205,6 @@ export default function BookCard({ book, onImport }: BookCardProps) {
         </div>
       </Link>
 
-      {/* Sélecteur d'étagères (s'affiche quand showShelfSelector est true) */}
       {showShelfSelector && (
         <div className="absolute z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
           <ShelfSelector 

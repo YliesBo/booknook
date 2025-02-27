@@ -1,3 +1,4 @@
+// pages/book/[id].tsx
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabase/supabaseClient';
@@ -18,20 +19,12 @@ type BookDetail = {
   authorNames: string[];
   genres: string[];
   publisher: string | null;
+  isbn_10: string | null;
+  isbn_13: string | null;
+  language: string | null;
+  series: string | null;
+  series_release_number: number | null;
 };
-
-// Interface pour les types retournés par Supabase (pour satisfaire TypeScript)
-interface AuthorData {
-  authors?: {
-    author_name?: string;
-  };
-}
-
-interface GenreData {
-  genres?: {
-    genre_name?: string;
-  };
-}
 
 export default function BookDetail() {
   const router = useRouter();
@@ -54,7 +47,20 @@ export default function BookDetail() {
       // Récupérer les détails du livre
       const { data: bookData, error: bookError } = await supabase
         .from('books')
-        .select('*')
+        .select(`
+          book_id,
+          title,
+          thumbnail,
+          synopsis,
+          published_date,
+          page_count,
+          isbn_10,
+          isbn_13,
+          publisher_id,
+          language_id,
+          series_id,
+          series_release_number
+        `)
         .eq('book_id', bookId)
         .single();
 
@@ -63,40 +69,40 @@ export default function BookDetail() {
       // Récupérer les auteurs
       const { data: authorsData, error: authorsError } = await supabase
         .from('book_authors')
-        .select('*')
+        .select('author_id')
         .eq('book_id', bookId);
 
       if (authorsError) throw authorsError;
 
       // Récupérer les noms d'auteurs
       const authorNames: string[] = [];
-for (const authorEntry of authorsData || []) {
-  if (authorEntry.author_id) {
-    try {
-      const { data: authorData, error: authorError } = await supabase
-        .from('authors')
-        .select('author_name')
-        .eq('author_id', authorEntry.author_id)
-        .single();
-      
-      if (authorError) {
-        console.error('Erreur lors de la récupération de l\'auteur:', authorError);
-        continue; // Continuer avec le prochain auteur en cas d'erreur
+      for (const authorEntry of authorsData || []) {
+        if (authorEntry.author_id) {
+          try {
+            const { data: authorData, error: authorError } = await supabase
+              .from('authors')
+              .select('author_name')
+              .eq('author_id', authorEntry.author_id)
+              .single();
+            
+            if (authorError) {
+              console.error('Erreur lors de la récupération de l\'auteur:', authorError);
+              continue;
+            }
+            
+            if (authorData && authorData.author_name) {
+              authorNames.push(authorData.author_name);
+            }
+          } catch (error) {
+            console.error('Erreur lors du traitement de l\'auteur:', error);
+          }
+        }
       }
-      
-      if (authorData && authorData.author_name) {
-        authorNames.push(authorData.author_name);
-      }
-    } catch (error) {
-      console.error('Erreur lors du traitement de l\'auteur:', error);
-    }
-  }
-}
 
       // Récupérer les genres
       const { data: genresData, error: genresError } = await supabase
         .from('books_genres')
-        .select('*')
+        .select('genre_id')
         .eq('book_id', bookId);
 
       if (genresError) throw genresError;
@@ -131,7 +137,35 @@ for (const authorEntry of authorsData || []) {
         }
       }
       
-      // Créer l'objet livre
+      // Récupérer la langue
+      let language = null;
+    if (bookData.language_id) {
+      const { data: languageData, error: languageError } = await supabase
+        .from('languages')
+        .select('language_name')
+        .eq('language_id', bookData.language_id)
+        .single();
+      
+      if (!languageError && languageData) {
+        language = languageData.language_name;
+      }
+    }
+      
+      // Récupérer la série
+      let series: string | null = null;
+      if (bookData.series_id) {
+        const { data: seriesData } = await supabase
+          .from('series')
+          .select('series_name')
+          .eq('series_id', bookData.series_id)
+          .single();
+        
+        if (seriesData) {
+          series = seriesData.series_name;
+        }
+      }
+      
+      // Créer l'objet livre complet
       const bookDetail: BookDetail = {
         book_id: bookData.book_id,
         title: bookData.title,
@@ -141,7 +175,12 @@ for (const authorEntry of authorsData || []) {
         page_count: bookData.page_count,
         authorNames,
         genres,
-        publisher
+        publisher,
+        isbn_10: bookData.isbn_10,
+        isbn_13: bookData.isbn_13,
+        language,
+        series,
+        series_release_number: bookData.series_release_number
       };
       
       setBook(bookDetail);
@@ -238,6 +277,15 @@ for (const authorEntry of authorsData || []) {
             )}
           </div>
           
+          {/* Afficher la série si disponible */}
+          {book.series && (
+            <div className="mt-2 text-gray-700">
+              <span className="font-medium">Série: </span>
+              {book.series} 
+              {book.series_release_number && ` (Tome ${book.series_release_number})`}
+            </div>
+          )}
+          
           {book.genres.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               {book.genres.map((genre, index) => (
@@ -287,25 +335,66 @@ for (const authorEntry of authorsData || []) {
                   {book.synopsis || "Pas de synopsis disponible pour ce livre."}
                 </p>
                 
-                {book.publisher && (
-                  <div className="mt-4">
-                    <h2 className="font-semibold mb-2">Éditeur</h2>
-                    <p className="text-gray-700">{book.publisher}</p>
-                  </div>
-                )}
+                {/* Informations supplémentaires */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {book.publisher && (
+                    <div>
+                      <span className="font-medium text-gray-700">Éditeur:</span>{' '}
+                      <span className="text-gray-600">{book.publisher}</span>
+                    </div>
+                  )}
+                  
+                  {book.language && (
+                    <div>
+                      <span className="font-medium text-gray-700">Langue:</span>{' '}
+                      <span className="text-gray-600">{book.language}</span>
+                    </div>
+                  )}
+                  
+                  {book.isbn_13 && (
+                    <div>
+                      <span className="font-medium text-gray-700">ISBN-13:</span>{' '}
+                      <span className="text-gray-600">{book.isbn_13}</span>
+                    </div>
+                  )}
+                  
+                  {book.isbn_10 && (
+                    <div>
+                      <span className="font-medium text-gray-700">ISBN-10:</span>{' '}
+                      <span className="text-gray-600">{book.isbn_10}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center mt-2 text-gray-600">
+  <span className="mr-4">
+    Par {book.authorNames.length > 0 ? book.authorNames.join(', ') : 'Auteur inconnu'}
+  </span>
+  
+  {book.published_date && (
+    <span className="mr-4">• {new Date(book.published_date).getFullYear()}</span>
+  )}
+  
+  {book.page_count && (
+    <span className="mr-4">• {book.page_count} pages</span>
+  )}
+  
+  {book.language && (
+    <span className="mr-4">• {book.language}</span>
+  )}
+</div>
               </div>
             )}
             
             {activeTab === 'reviews' && (
-             <div>
-             <h2 className="font-semibold mb-4">Avis des lecteurs</h2>
-                 <ReviewList bookId={book.book_id} refreshTrigger={refreshReviews} />
+              <div>
+                <h2 className="font-semibold mb-4">Avis des lecteurs</h2>
+                <ReviewList bookId={book.book_id} refreshTrigger={refreshReviews} />
     
-            <div className="mt-8">
-      <ReviewForm bookId={book.book_id} onSuccess={() => setRefreshReviews(prev => prev + 1)} />
-    </div>
-  </div>
-)}
+                <div className="mt-8">
+                  <ReviewForm bookId={book.book_id} onSuccess={handleReviewSuccess} />
+                </div>
+              </div>
+            )}
             
             {activeTab === 'similar' && (
               <div>
