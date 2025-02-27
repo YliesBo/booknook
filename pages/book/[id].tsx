@@ -70,19 +70,28 @@ export default function BookDetail() {
 
       // Récupérer les noms d'auteurs
       const authorNames: string[] = [];
-      for (const authorEntry of authorsData || []) {
-        if (authorEntry.author_id) {
-          const { data: authorData } = await supabase
-            .from('authors')
-            .select('author_name')
-            .eq('author_id', authorEntry.author_id)
-            .single();
-          
-          if (authorData && authorData.author_name) {
-            authorNames.push(authorData.author_name);
-          }
-        }
+for (const authorEntry of authorsData || []) {
+  if (authorEntry.author_id) {
+    try {
+      const { data: authorData, error: authorError } = await supabase
+        .from('authors')
+        .select('author_name')
+        .eq('author_id', authorEntry.author_id)
+        .single();
+      
+      if (authorError) {
+        console.error('Erreur lors de la récupération de l\'auteur:', authorError);
+        continue; // Continuer avec le prochain auteur en cas d'erreur
       }
+      
+      if (authorData && authorData.author_name) {
+        authorNames.push(authorData.author_name);
+      }
+    } catch (error) {
+      console.error('Erreur lors du traitement de l\'auteur:', error);
+    }
+  }
+}
 
       // Récupérer les genres
       const { data: genresData, error: genresError } = await supabase
@@ -288,11 +297,11 @@ export default function BookDetail() {
             )}
             
             {activeTab === 'reviews' && (
-  <div>
-    <h2 className="font-semibold mb-4">Avis des lecteurs</h2>
-    <ReviewList bookId={book.book_id} refreshTrigger={refreshReviews} />
+             <div>
+             <h2 className="font-semibold mb-4">Avis des lecteurs</h2>
+                 <ReviewList bookId={book.book_id} refreshTrigger={refreshReviews} />
     
-    <div className="mt-8">
+            <div className="mt-8">
       <ReviewForm bookId={book.book_id} onSuccess={() => setRefreshReviews(prev => prev + 1)} />
     </div>
   </div>

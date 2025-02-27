@@ -1,6 +1,7 @@
 // components/books/BookCard.tsx
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { FiPlus } from 'react-icons/fi';
 import ShelfSelector from '../shelves/ShelfSelector';
 
@@ -16,6 +17,7 @@ type BookCardProps = {
 };
 
 export default function BookCard({ book, onImport }: BookCardProps) {
+  const router = useRouter();
   const [showShelfSelector, setShowShelfSelector] = useState(false);
   const [showAddButton, setShowAddButton] = useState(false);
   const [longPressTriggered, setLongPressTriggered] = useState(false);
@@ -56,10 +58,41 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   };
 
   // Annuler la navigation si un long press a été déclenché
-  const handleLinkClick = (e: React.MouseEvent) => {
+  const handleLinkClick = async (e: React.MouseEvent) => {
     if (longPressTriggered) {
       e.preventDefault();
       setLongPressTriggered(false);
+      return;
+    }
+
+    // Si c'est un livre Google Books, importer en arrière-plan
+    if (book.source === 'google_books') {
+      e.preventDefault();
+      setLoading(true);
+      
+      try {
+        const response = await fetch('/api/import-book', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ googleBookId: book.id }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Error ${response.status}`);
+        }
+        
+        const data = await response.json();
+        router.push(`/book/${data.book_id}`);
+      } catch (error) {
+        console.error('Error importing book:', error);
+        // Option: Afficher une notification d'erreur à l'utilisateur
+        alert('Une erreur est survenue lors de l\'importation du livre. Veuillez réessayer.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -86,7 +119,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
     };
   }, []);
 
-  // Gérer l'import des livres de Google Books
+  // Gérer l'ajout à une étagère
   const handleAddButtonClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -95,6 +128,10 @@ export default function BookCard({ book, onImport }: BookCardProps) {
       setLoading(true);
       try {
         await onImport(book.id);
+        setShowShelfSelector(true);
+      } catch (error) {
+        console.error('Error importing book for shelf selection:', error);
+        alert('Une erreur est survenue lors de l\'importation du livre pour la sélection d\'étagère.');
       } finally {
         setLoading(false);
       }
@@ -128,10 +165,10 @@ export default function BookCard({ book, onImport }: BookCardProps) {
             />
           )}
           
-          {/* Badge pour Google Books */}
-          {book.source === 'google_books' && (
-            <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 m-1 rounded-md">
-              Google Books
+          {/* Afficher un indicateur de chargement pendant l'importation */}
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
             </div>
           )}
           

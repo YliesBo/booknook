@@ -78,7 +78,6 @@ export default function Search() {
       
       const data = await response.json();
       
-      // Au lieu de rediriger, retourner l'ID du livre pour permettre d'ouvrir le sélecteur d'étagère
       return data.book_id;
     } catch (error) {
       console.error('Error importing book:', error);
@@ -227,71 +226,17 @@ export default function Search() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {displayResults().length > 0 ? (
                 displayResults().map((result) => (
-                  <div key={`${result.source}-${result.id}`} className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 relative group">
-                    {/* Afficher un badge pour les résultats Google Books */}
-                    {result.source === 'google_books' && (
-                      <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 m-1 rounded-md">
-                        Google Books
-                      </div>
-                    )}
-                
-
-                    {/* Lien différent selon la source */}
-                    {result.source === 'database' ? (
-                      <Link href={`/book/${result.id}`}>
-                        <div className="aspect-[2/3] bg-gray-200 relative">
-                          {result.thumbnail && (
-                            <img 
-                              src={result.thumbnail} 
-                              alt={result.title}
-                              className="object-cover w-full h-full"
-                            />
-                          )}
-                        </div>
-                        <div className="p-2">
-                          <h3 className="font-medium text-sm line-clamp-1">{result.title}</h3>
-                          <p className="text-xs text-gray-600 line-clamp-1">
-                            {result.authors.length > 0 
-                              ? result.authors.join(', ') 
-                              : 'Auteur inconnu'}
-                          </p>
-                        </div>
-                      </Link>
-                    ) : (
-                      <div>
-                        <div className="aspect-[2/3] bg-gray-200 relative">
-                          {result.thumbnail && (
-                            <img 
-                              src={result.thumbnail} 
-                              alt={result.title}
-                              className="object-cover w-full h-full"
-                            />
-                          )}
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center transition-all duration-200">
-                            <button
-                              onClick={() => importBook(result.id)}
-                              disabled={importing[result.id]}
-                              className="bg-blue-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                            >
-                              {importing[result.id] ? (
-                                <div className="animate-spin h-5 w-5 border-t-2 border-b-2 border-white rounded-full"></div>
-                              ) : (
-                                <FiPlus size={20} />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="p-2">
-                          <h3 className="font-medium text-sm line-clamp-1">{result.title}</h3>
-                          <p className="text-xs text-gray-600 line-clamp-1">
-                            {result.authors.length > 0 
-                              ? result.authors.join(', ') 
-                              : 'Auteur inconnu'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <BookCard
+                    key={`${result.source}-${result.id}`}
+                    book={{
+                      id: result.id,
+                      title: result.title,
+                      authors: result.authors,
+                      thumbnail: result.thumbnail,
+                      source: result.source
+                    }}
+                    onImport={importBook}
+                  />
                 ))
               ) : (
                 <p className="col-span-full text-center text-gray-500 my-12">
