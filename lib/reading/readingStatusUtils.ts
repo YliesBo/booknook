@@ -6,7 +6,7 @@ export interface BookWithStatus {
     title: string;
     thumbnail: string | null;
     date_added: string;
-  }
+  }  
 
 export type ReadingStatus = 'to_read' | 'reading' | 'read' | 'abandoned';
 
@@ -123,6 +123,17 @@ export async function getBooksWithStatus(userId: string, status: ReadingStatus) 
         .eq('status', status);
         
       if (error) throw error;
+      
+      // Définir un type explicite pour data
+      interface ReadingStatusData {
+        book_id: string;
+        date_added: string;
+        books: {
+          book_id: string;
+          title: string;
+          thumbnail: string | null;
+        } | null;
+      }
       
       // Utiliser une assertion de type pour indiquer à TypeScript la structure des données
       const typedData = data as ReadingStatusData[] || [];
