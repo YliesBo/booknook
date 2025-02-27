@@ -1,11 +1,11 @@
 // pages/reading-status/[status].tsx
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../../context/AuthContext';
-import { useProtectedRoute } from '../../lib/hooks/useProtectedRoute';
+import { useAuth } from '../../../context/AuthContext';
+import { useProtectedRoute } from '../../../lib/hooks/useProtectedRoute';
 import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
-import { readingStatusLabels, getBooksWithStatus, ReadingStatus } from '../../lib/reading/readingStatusUtils';
+import { readingStatusLabels, getBooksWithStatus, ReadingStatus } from '../../../lib/reading/readingStatusUtils';
 
 type BookItem = {
   book_id: string;

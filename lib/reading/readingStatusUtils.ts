@@ -1,6 +1,13 @@
 // lib/reading/readingStatusUtils.ts
 import { supabase } from '../supabase/supabaseClient';
 
+export interface BookWithStatus {
+    book_id: string;
+    title: string;
+    thumbnail: string | null;
+    date_added: string;
+  }
+
 export type ReadingStatus = 'to_read' | 'reading' | 'read' | 'abandoned';
 
 export const readingStatusLabels: Record<ReadingStatus, string> = {
@@ -86,38 +93,51 @@ export async function setReadingStatus(userId: string, bookId: string, status: R
   }
 }
 
+interface ReadingStatusData {
+    book_id: string;
+    date_added: string;
+    books: {
+      book_id: string;
+      title: string;
+      thumbnail: string | null;
+    } | null;
+  }
+
 // Récupérer les livres ayant un statut spécifique
 export async function getBooksWithStatus(userId: string, status: ReadingStatus) {
-  if (!userId) return { books: [], error: 'User ID est requis' };
-  
-  try {
-    const { data, error } = await supabase
-      .from('reading_status')
-      .select(`
-        book_id,
-        date_added,
-        books (
+    if (!userId) return { books: [] as BookWithStatus[], error: 'User ID est requis' };
+    
+    try {
+      const { data, error } = await supabase
+        .from('reading_status')
+        .select(`
           book_id,
-          title,
-          thumbnail
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('status', status);
+          date_added,
+          books (
+            book_id,
+            title,
+            thumbnail
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', status);
+        
+      if (error) throw error;
       
-    if (error) throw error;
-    
-    // Transformer les données pour faciliter l'utilisation
-    const books = data?.map(item => ({
-      book_id: item.book_id,
-      title: item.books.title,
-      thumbnail: item.books.thumbnail,
-      date_added: item.date_added
-    })) || [];
-    
-    return { books, error: null };
-  } catch (error: any) {
-    console.error(`Erreur lors de la récupération des livres avec statut ${status}:`, error);
-    return { books: [], error: error.message || 'Une erreur est survenue' };
+      // Utiliser une assertion de type pour indiquer à TypeScript la structure des données
+      const typedData = data as ReadingStatusData[] || [];
+      
+      // Transformer les données avec gestion des valeurs null/undefined
+      const books = typedData.map(item => ({
+        book_id: item.book_id,
+        title: item.books?.title || 'Titre inconnu',
+        thumbnail: item.books?.thumbnail || null,
+        date_added: item.date_added
+      }));
+      
+      return { books, error: null };
+    } catch (error: any) {
+      console.error(`Erreur lors de la récupération des livres avec statut ${status}:`, error);
+      return { books: [] as BookWithStatus[], error: error.message || 'Une erreur est survenue' };
+    }
   }
-}

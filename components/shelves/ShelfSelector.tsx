@@ -131,17 +131,21 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     
     setAddingToShelf(true);
     try {
-      // Si le livre est déjà sur une étagère, on le retire
-      if (selectedShelf) {
+      // Vérifions si le livre est déjà sur cette étagère
+      const isAlreadyOnShelf = selectedShelves.includes(shelfId);
+      
+      if (isAlreadyOnShelf) {
+        // Si le livre est déjà sur cette étagère, on le retire
         await supabase
           .from('bookshelves')
           .delete()
           .eq('user_id', user.id)
-          .eq('book_id', bookId);
-      }
-
-      // Si on a sélectionné une étagère différente, on ajoute le livre
-      if (shelfId !== selectedShelf) {
+          .eq('book_id', bookId)
+          .eq('shelf_id', shelfId);
+          
+        setSelectedShelves(selectedShelves.filter(id => id !== shelfId));
+      } else {
+        // Sinon, on ajoute le livre à l'étagère
         const { error } = await supabase
           .from('bookshelves')
           .insert({
@@ -150,12 +154,9 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
             shelf_id: shelfId,
             date_added: new Date().toISOString()
           });
-
+  
         if (error) throw error;
-        setSelectedShelf(shelfId);
-      } else {
-        // Si c'était la même étagère, on désélectionne
-        setSelectedShelf(null);
+        setSelectedShelves([...selectedShelves, shelfId]);
       }
       
       onClose?.();

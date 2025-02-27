@@ -46,8 +46,8 @@ export default async function handler(
     }
 
     // Extraire les ISBN et autres identifiants
-    let isbn10 = null;
-    let isbn13 = null;
+    let isbn10: string | null = null;
+    let isbn13: string | null = null;
     
     if (bookDetails.volumeInfo.industryIdentifiers) {
       for (const identifier of bookDetails.volumeInfo.industryIdentifiers) {
@@ -370,19 +370,15 @@ function getLanguageName(languageCode: string): string {
 }
 
 // Fonction pour extraire les informations de série du titre ou sous-titre
-function extractSeriesInfo(title: string, subtitle?: string): { seriesName: string | null, releaseNumber: number | null } {
-  const result = { seriesName: null, releaseNumber: null };
+function extractSeriesInfo(title: string, subtitle?: string | null): { seriesName: string | null; releaseNumber: number | null } {
+  const result = { seriesName: null as string | null, releaseNumber: null as number | null };
   
   // Motifs courants dans les titres de séries
-  // Ex: "Harry Potter and the Prisoner of Azkaban (Harry Potter #3)"
-  // Ex: "Book Title - Series Name: Volume 2"
-  
-  // Chercher dans le titre
   const seriesPatterns = [
-    /\((.*?)#(\d+\.?\d*)\)/i,          // (Series Name #1)
-    /\((.*?),?\s+(?:Book|Vol\.?|Volume|Tome|Part)\.?\s*(\d+\.?\d*)\)/i, // (Series Name, Book 1)
-    /(.*?)(?:Series|Saga|Trilogy|Duology):\s+(?:Book|Vol\.?|Volume|Tome|Part)\.?\s*(\d+\.?\d*)/i, // Series Name Series: Book 1
-    /^(.*?)\s+(\d+\.?\d*)$/i           // Series Name 1
+    /\((.*?)#(\d+\.?\d*)\)/i,
+    /\((.*?),?\s+(?:Book|Vol\.?|Volume|Tome|Part)\.?\s*(\d+\.?\d*)\)/i,
+    /(.*?)(?:Series|Saga|Trilogy|Duology):\s+(?:Book|Vol\.?|Volume|Tome|Part)\.?\s*(\d+\.?\d*)/i,
+    /^(.*?)\s+(\d+\.?\d*)$/i
   ];
 
   for (const pattern of seriesPatterns) {

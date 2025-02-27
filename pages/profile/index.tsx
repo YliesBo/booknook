@@ -3,9 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useProtectedRoute } from '../../lib/hooks/useProtectedRoute';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import Link from 'next/link';
-import { FiEdit2, FiBookOpen, FiBook, FiClock, FiPauseCircle, FiCheckCircle } from 'react-icons/fi';
 import { updateUsername, updateBio, getUserProfile } from '../../lib/users/userUtils';
 import { readingStatusLabels, getBooksWithStatus } from '../../lib/reading/readingStatusUtils';
+import { FiEdit2, FiBookOpen, FiBook, FiClock, FiPauseCircle, FiCheckCircle, FiX } from 'react-icons/fi';
 
 
 type UserStats = {
@@ -15,6 +15,7 @@ type UserStats = {
   onHoldCount: number;
   readCount: number;
   reviewCount: number;
+  abandonedCount?: number; // Ajout de cette propriété
 };
 
 // Types simplifiés pour les activités récentes

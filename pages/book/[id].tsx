@@ -1,16 +1,15 @@
 // pages/book/[id].tsx
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase/supabaseClient';
-import { FiBookmark, FiStar, FiClock } from 'react-icons/fi';
+import { FiBookmark, FiStar, FiClock, FiCheck, FiX } from 'react-icons/fi';
 import Link from 'next/link';
 import ShelfSelector from '../../components/shelves/ShelfSelector';
 import ReviewForm from '../../components/books/ReviewForm';
 import ReviewList from '../../components/books/ReviewList';
-import { FiBookmark, FiStar, FiClock, FiCheck, FiX } from 'react-icons/fi';
-import ShelfSelector from '../../components/shelves/ShelfSelector';
 import ReadingStatusSelector from '../../components/books/ReadingStatusSelector';
-import { getReadingStatus, readingStatusLabels } from '../../lib/reading/readingStatusUtils';
+import { getReadingStatus, readingStatusLabels, ReadingStatus } from '../../lib/reading/readingStatusUtils';
 
 
 // Types pour les données du livre
@@ -32,23 +31,26 @@ type BookDetail = {
 };
 
 export default function BookDetail() {
-  const router = useRouter();
-  const { id } = router.query;
-  const [book, setBook] = useState<BookDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('about');
-  const [showShelfSelector, setShowShelfSelector] = useState(false);
-  const [refreshReviews, setRefreshReviews] = useState(0);
-  const [showStatusSelector, setShowStatusSelector] = useState(false);
-  const [readingStatus, setReadingStatus] = useState<ReadingStatus | null>(null);
-
-  useEffect(() => {
-    if (id && user) {
-      fetchBookDetails(id as string);
-      fetchReadingStatus(id as string); // Nouvelle fonction
-    }
-  }, [id, user]);
-
+    const router = useRouter();
+    const { id } = router.query;
+    const { user } = useAuth(); // Ajout de cette ligne pour obtenir l'utilisateur
+    const [book, setBook] = useState<BookDetail | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('about');
+    const [showShelfSelector, setShowShelfSelector] = useState(false);
+    const [refreshReviews, setRefreshReviews] = useState(0);
+    const [showStatusSelector, setShowStatusSelector] = useState(false);
+    const [readingStatus, setReadingStatus] = useState<ReadingStatus | null>(null);
+  
+    useEffect(() => {
+      if (id && user) {
+        fetchBookDetails(id as string);
+        fetchReadingStatus(id as string);
+      } else if (id) {
+        // Pour les utilisateurs non connectés, récupérer uniquement les détails du livre
+        fetchBookDetails(id as string);
+      }
+    }, [id, user]);
   const fetchReadingStatus = async (bookId: string) => {
     if (!user) return;
     
