@@ -11,6 +11,9 @@ export default {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        gray: {
+          200: "#000000", // Remplacer #e5e7eb par #000000
+        },
       },
     },
   },

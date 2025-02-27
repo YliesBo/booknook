@@ -16,21 +16,21 @@ type ShelfSelectorProps = {
 };
 
 export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
-  const { user } = useAuth();
-  const [shelves, setShelves] = useState<Shelf[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
-  const [newShelfName, setNewShelfName] = useState('');
-  const [showNewShelfInput, setShowNewShelfInput] = useState(false);
-  const [addingToShelf, setAddingToShelf] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (user) {
-      fetchShelves();
-      fetchCurrentShelf();
-    }
-  }, [user, bookId]);
+    const { user } = useAuth();
+    const [shelves, setShelves] = useState<Shelf[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedShelves, setSelectedShelves] = useState<string[]>([]);
+    const [newShelfName, setNewShelfName] = useState('');
+    const [showNewShelfInput, setShowNewShelfInput] = useState(false);
+    const [addingToShelf, setAddingToShelf] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+  
+    useEffect(() => {
+      if (user) {
+        fetchShelves();
+        fetchCurrentShelves();
+      }
+    }, [user, bookId]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -53,7 +53,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
         .from('shelves')
         .select('shelf_id, shelf_name, is_system')
         .eq('user_id', user.id)
-        .order('is_system', { ascending: false })
+        .eq('is_system', false) // Ne récupérer que les étagères personnalisées
         .order('shelf_name');
 
       if (error) throw error;
@@ -65,7 +65,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     }
   };
 
-  const fetchCurrentShelf = async () => {
+  const fetchCurrentShelves = async () => {
     if (!user || !bookId) return;
     
     try {
@@ -73,16 +73,56 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
         .from('bookshelves')
         .select('shelf_id')
         .eq('user_id', user.id)
-        .eq('book_id', bookId)
-        .single();
+        .eq('book_id', bookId);
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+      if (error) throw error;
       
-      if (data) {
-        setSelectedShelf(data.shelf_id);
+      // Extraire les IDs des étagères
+      const shelfIds = data.map(item => item.shelf_id);
+      setSelectedShelves(shelfIds);
+    } catch (error) {
+      console.error('Erreur lors de la vérification des étagères :', error);
+    }
+  };
+
+  const toggleShelf = async (shelfId: string) => {
+    if (!user || !bookId) return;
+    
+    setAddingToShelf(true);
+    try {
+      const isSelected = selectedShelves.includes(shelfId);
+      
+      if (isSelected) {
+        // Retirer le livre de l'étagère
+        const { error } = await supabase
+          .from('bookshelves')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('book_id', bookId)
+          .eq('shelf_id', shelfId);
+
+        if (error) throw error;
+        
+        setSelectedShelves(selectedShelves.filter(id => id !== shelfId));
+      } else {
+        // Ajouter le livre à l'étagère
+        const { error } = await supabase
+          .from('bookshelves')
+          .insert({
+            user_id: user.id,
+            book_id: bookId,
+            shelf_id: shelfId,
+            date_added: new Date().toISOString()
+          });
+
+        if (error) throw error;
+        
+        setSelectedShelves([...selectedShelves, shelfId]);
       }
     } catch (error) {
-      console.error('Erreur lors de la vérification de l\'étagère :', error);
+      console.error('Erreur lors de la modification de l\'étagère :', error);
+    } finally {
+      setAddingToShelf(false);
     }
   };
 
@@ -172,21 +212,27 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
         </div>
       ) : (
         <div className="space-y-2 max-h-60 overflow-y-auto">
-          {shelves.map(shelf => (
-            <button
-              key={shelf.shelf_id}
-              className={`flex items-center justify-between w-full p-2 rounded-md ${
-                selectedShelf === shelf.shelf_id 
-                  ? 'bg-blue-50 text-blue-600' 
-                  : 'hover:bg-gray-100'
-              }`}
-              onClick={() => addToShelf(shelf.shelf_id)}
-              disabled={addingToShelf}
-            >
-              <span>{shelf.shelf_name}</span>
-              {selectedShelf === shelf.shelf_id && <FiCheck className="text-blue-600" />}
-            </button>
-          ))}
+          {shelves.length > 0 ? (
+            shelves.map(shelf => (
+              <button
+                key={shelf.shelf_id}
+                className={`flex items-center justify-between w-full p-2 rounded-md ${
+                  selectedShelves.includes(shelf.shelf_id) 
+                    ? 'bg-blue-50 text-blue-600' 
+                    : 'hover:bg-gray-100 text-black'
+                }`}
+                onClick={() => toggleShelf(shelf.shelf_id)}
+                disabled={addingToShelf}
+              >
+                <span>{shelf.shelf_name}</span>
+                {selectedShelves.includes(shelf.shelf_id) && <FiCheck className="text-blue-600" />}
+              </button>
+            ))
+          ) : (
+            <p className="text-center text-gray-500">
+              Vous n'avez pas encore d'étagères personnalisées.
+            </p>
+          )}
           
           {showNewShelfInput ? (
             <div className="p-2 border-t">
@@ -196,7 +242,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
                   value={newShelfName}
                   onChange={e => setNewShelfName(e.target.value)}
                   placeholder="Nom de l'étagère"
-                  className="flex-1 p-1 border rounded-md"
+                  className="flex-1 p-1 border rounded-md text-black"
                   autoFocus
                 />
                 <button

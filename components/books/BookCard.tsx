@@ -2,8 +2,10 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiCheck, FiBookmark, FiClock, FiX } from 'react-icons/fi';
 import ShelfSelector from '../shelves/ShelfSelector';
+import { useAuth } from '../../context/AuthContext';
+import { setReadingStatus } from '../../lib/reading/readingStatusUtils';
 
 type BookCardProps = {
   book: {
@@ -13,13 +15,14 @@ type BookCardProps = {
     thumbnail: string | null;
     source?: 'database' | 'google_books';
   };
-  onImport?: (id: string) => Promise<void>;
+  onImport?: (id: string) => Promise<string>;
 };
 
 export default function BookCard({ book, onImport }: BookCardProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [showShelfSelector, setShowShelfSelector] = useState(false);
-  const [showAddButton, setShowAddButton] = useState(false);
+  const [showButtons, setShowButtons] = useState(false);
   const [longPressTriggered, setLongPressTriggered] = useState(false);
   const [loading, setLoading] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -27,11 +30,11 @@ export default function BookCard({ book, onImport }: BookCardProps) {
 
   // Gestion du survol (desktop)
   const handleMouseEnter = () => {
-    setShowAddButton(true);
+    setShowButtons(true);
   };
 
   const handleMouseLeave = () => {
-    setShowAddButton(false);
+    setShowButtons(false);
   };
 
   // Gestion du long press (mobile)
@@ -125,24 +128,41 @@ export default function BookCard({ book, onImport }: BookCardProps) {
     };
   }, []);
 
-  const handleAddButtonClick = async (e: React.MouseEvent) => {
+  // Fonctions pour gérer les statuts de lecture
+  const handleReadingStatus = async (status: 'to_read' | 'reading' | 'read' | 'abandoned') => {
+    if (!user) {
+      alert('Veuillez vous connecter pour définir un statut de lecture');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // Si c'est un livre Google Books, il faut d'abord l'importer
+      let bookId = book.id;
+      if (book.source === 'google_books' && onImport) {
+        bookId = await onImport(book.id);
+      }
+      
+      await setReadingStatus(user.id, bookId, status);
+      
+    } catch (error) {
+      console.error(`Erreur lors de la définition du statut ${status}:`, error);
+      alert(`Une erreur est survenue lors de la définition du statut`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleAddToShelf = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    if (book.source === 'google_books' && onImport) {
-      setLoading(true);
-      try {
-        await onImport(book.id);
-        setShowShelfSelector(true);
-      } catch (error) {
-        console.error('Error importing book for shelf selection:', error);
-        alert('Une erreur est survenue lors de l\'importation du livre');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      setShowShelfSelector(true);
+    
+    if (!user) {
+      alert('Veuillez vous connecter pour ajouter des livres à vos étagères');
+      return;
     }
+    
+    setShowShelfSelector(true);
   };
 
   return (
@@ -176,28 +196,64 @@ export default function BookCard({ book, onImport }: BookCardProps) {
             </div>
           )}
           
-          <div 
-            className={`absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-all duration-200 ${
-              showAddButton ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            {!showShelfSelector && (
-              <button
-                onClick={handleAddButtonClick}
-                className="bg-blue-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
-              >
-                {loading ? (
-                  <div className="animate-spin h-5 w-5 border-t-2 border-b-2 border-white rounded-full"></div>
-                ) : (
-                  <FiPlus size={20} />
-                )}
-              </button>
-            )}
-          </div>
+          {/* Overlay et boutons d'action */}
+          {showButtons && !showShelfSelector && (
+            <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+              <div className="flex space-x-2 p-1">
+                {/* Bouton "À lire" */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleReadingStatus('to_read');
+                  }}
+                  className="bg-blue-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                  title="Marquer comme à lire"
+                >
+                  <FiPlus size={18} />
+                </button>
+                
+                {/* Bouton "En cours" */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleReadingStatus('reading');
+                  }}
+                  className="bg-green-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                  title="Marquer comme en cours"
+                >
+                  <FiClock size={18} />
+                </button>
+                
+                {/* Bouton "Lu" */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleReadingStatus('read');
+                  }}
+                  className="bg-purple-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                  title="Marquer comme lu"
+                >
+                  <FiCheck size={18} />
+                </button>
+                
+                {/* Bouton "Ajouter à une étagère" */}
+                <button
+                  onClick={handleAddToShelf}
+                  className="bg-yellow-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                  title="Ajouter à une étagère"
+                >
+                  <FiBookmark size={18} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="p-2">
-          <h3 className="font-medium text-sm line-clamp-1">{book.title}</h3>
-          <p className="text-xs text-gray-600 line-clamp-1">
+          <h3 className="font-medium text-sm line-clamp-1 text-black">{book.title}</h3>
+          <p className="text-xs text-black line-clamp-1">
             {book.authors.length > 0 
               ? book.authors.join(', ') 
               : 'Auteur inconnu'}

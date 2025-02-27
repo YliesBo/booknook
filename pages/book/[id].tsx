@@ -7,6 +7,11 @@ import Link from 'next/link';
 import ShelfSelector from '../../components/shelves/ShelfSelector';
 import ReviewForm from '../../components/books/ReviewForm';
 import ReviewList from '../../components/books/ReviewList';
+import { FiBookmark, FiStar, FiClock, FiCheck, FiX } from 'react-icons/fi';
+import ShelfSelector from '../../components/shelves/ShelfSelector';
+import ReadingStatusSelector from '../../components/books/ReadingStatusSelector';
+import { getReadingStatus, readingStatusLabels } from '../../lib/reading/readingStatusUtils';
+
 
 // Types pour les données du livre
 type BookDetail = {
@@ -34,12 +39,26 @@ export default function BookDetail() {
   const [activeTab, setActiveTab] = useState('about');
   const [showShelfSelector, setShowShelfSelector] = useState(false);
   const [refreshReviews, setRefreshReviews] = useState(0);
+  const [showStatusSelector, setShowStatusSelector] = useState(false);
+  const [readingStatus, setReadingStatus] = useState<ReadingStatus | null>(null);
 
   useEffect(() => {
-    if (id) {
+    if (id && user) {
       fetchBookDetails(id as string);
+      fetchReadingStatus(id as string); // Nouvelle fonction
     }
-  }, [id]);
+  }, [id, user]);
+
+  const fetchReadingStatus = async (bookId: string) => {
+    if (!user) return;
+    
+    try {
+      const status = await getReadingStatus(user.id, bookId);
+      setReadingStatus(status);
+    } catch (error) {
+      console.error('Erreur lors de la récupération du statut de lecture:', error);
+    }
+  };
 
   const fetchBookDetails = async (bookId: string) => {
     setLoading(true);
@@ -244,15 +263,61 @@ export default function BookDetail() {
                 className="object-cover w-full h-full"
               />
             )}
+            
+            {/* Badge pour indiquer le statut de lecture */}
+            {readingStatus && (
+              <div className={`absolute top-2 right-2 rounded-full px-2 py-1 text-xs font-medium ${
+                readingStatus === 'to_read' ? 'bg-blue-500 text-white' :
+                readingStatus === 'reading' ? 'bg-green-500 text-white' :
+                readingStatus === 'read' ? 'bg-purple-500 text-white' :
+                'bg-red-500 text-white'
+              }`}>
+                {readingStatusLabels[readingStatus]}
+              </div>
+            )}
           </div>
           
           <div className="mt-4 grid grid-cols-2 gap-2">
+            {/* Bouton de statut de lecture */}
+            <div className="relative">
+              <button 
+                className={`${
+                  readingStatus === 'to_read' ? 'bg-blue-500' :
+                  readingStatus === 'reading' ? 'bg-green-500' :
+                  readingStatus === 'read' ? 'bg-purple-500' :
+                  readingStatus === 'abandoned' ? 'bg-red-500' :
+                  'bg-gray-500'
+                } text-white py-2 px-4 rounded-lg flex items-center justify-center w-full`}
+                onClick={() => setShowStatusSelector(!showStatusSelector)}
+              >
+                {readingStatus ? (
+                  <>{readingStatusLabels[readingStatus]}</>
+                ) : (
+                  <>Statut de lecture</>
+                )}
+              </button>
+              
+              {showStatusSelector && (
+                <div className="absolute mt-2 z-10">
+                  <ReadingStatusSelector 
+                    bookId={book.book_id} 
+                    onClose={() => setShowStatusSelector(false)}
+                    onStatusChange={(status) => {
+                      setReadingStatus(status);
+                      setShowStatusSelector(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Bouton d'étagère */}
             <div className="relative">
               <button 
                 className="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center justify-center w-full"
                 onClick={() => setShowShelfSelector(!showShelfSelector)}
               >
-                <FiBookmark className="mr-2" /> Ajouter
+                <FiBookmark className="mr-2" /> Étagères
               </button>
               
               {showShelfSelector && (
