@@ -6,6 +6,7 @@ import { FiPlus, FiCheck, FiBookmark, FiClock, FiX } from 'react-icons/fi';
 import ShelfSelector from '../shelves/ShelfSelector';
 import { useAuth } from '../../context/AuthContext';
 import { getReadingStatus, setReadingStatus, readingStatusLabels, ReadingStatus } from '../../lib/reading/readingStatusUtils';
+import { supabase } from '../../lib/supabase/supabaseClient';
 
 
 type BookCardProps = {
@@ -159,12 +160,31 @@ export default function BookCard({ book, onImport }: BookCardProps) {
       // Si c'est un livre Google Books, il faut d'abord l'importer
       let bookId = book.id;
       if (book.source === 'google_books' && onImport) {
-        bookId = await onImport(book.id);
+        try {
+          bookId = await onImport(book.id);
+        } catch (importError) {
+          console.error('Erreur lors de l\'importation du livre:', importError);
+          alert('Impossible d\'ajouter le statut de lecture. Erreur d\'importation.');
+          return;
+        }
       }
       
-      const result = await setReadingStatus(user.id, bookId, status);
-      if (result.error) {
-        throw new Error(result.error);
+      // Utiliser directement la méthode Supabase
+      const { error } = await supabase
+        .from('reading_status')
+        .upsert({
+          user_id: user.id,
+          book_id: bookId,
+          status: status,
+          date_added: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,book_id' // Clé unique : combination de user_id et book_id
+        });
+  
+      if (error) {
+        console.error('Erreur lors de la mise à jour du statut :', error);
+        alert('Impossible de mettre à jour le statut de lecture');
+        return;
       }
       
       // Mettre à jour l'état local

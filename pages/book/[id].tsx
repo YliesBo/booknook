@@ -11,7 +11,6 @@ import ReviewList from '../../components/books/ReviewList';
 import ReadingStatusSelector from '../../components/books/ReadingStatusSelector';
 import { getReadingStatus, readingStatusLabels, ReadingStatus } from '../../lib/reading/readingStatusUtils';
 
-
 // Types pour les données du livre
 type BookDetail = {
   book_id: string;
@@ -31,26 +30,27 @@ type BookDetail = {
 };
 
 export default function BookDetail() {
-    const router = useRouter();
-    const { id } = router.query;
-    const { user } = useAuth(); // Ajout de cette ligne pour obtenir l'utilisateur
-    const [book, setBook] = useState<BookDetail | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('about');
-    const [showShelfSelector, setShowShelfSelector] = useState(false);
-    const [refreshReviews, setRefreshReviews] = useState(0);
-    const [showStatusSelector, setShowStatusSelector] = useState(false);
-    const [readingStatus, setReadingStatus] = useState<ReadingStatus | null>(null);
+  const router = useRouter();
+  const { id } = router.query;
+  const { user } = useAuth();
+  const [book, setBook] = useState<BookDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('about');
+  const [showShelfSelector, setShowShelfSelector] = useState(false);
+  const [refreshReviews, setRefreshReviews] = useState(0);
+  const [showStatusSelector, setShowStatusSelector] = useState(false);
+  const [readingStatus, setReadingStatus] = useState<ReadingStatus | null>(null);
   
-    useEffect(() => {
-      if (id && user) {
-        fetchBookDetails(id as string);
-        fetchReadingStatus(id as string);
-      } else if (id) {
-        // Pour les utilisateurs non connectés, récupérer uniquement les détails du livre
-        fetchBookDetails(id as string);
-      }
-    }, [id, user]);
+  useEffect(() => {
+    if (id && user) {
+      fetchBookDetails(id as string);
+      fetchReadingStatus(id as string);
+    } else if (id) {
+      // Pour les utilisateurs non connectés, récupérer uniquement les détails du livre
+      fetchBookDetails(id as string);
+    }
+  }, [id, user]);
+
   const fetchReadingStatus = async (bookId: string) => {
     if (!user) return;
     
@@ -107,6 +107,7 @@ export default function BookDetail() {
       if (genresResult.error) throw genresResult.error;
       
       const bookData = bookResult.data;
+      if (!bookData) throw new Error("Données du livre non trouvées");
       
       // Récupérer les infos additionnelles en parallèle
       const promises = [];
@@ -132,7 +133,7 @@ export default function BookDetail() {
       promises.push(Promise.all(genrePromises));
       
       // Éditeur
-      let publisherPromise = Promise.resolve(null);
+      let publisherPromise: Promise<any> = Promise.resolve({ data: null, error: null });
       if (bookData.publisher_id) {
         publisherPromise = supabase
           .from('publishers')
@@ -143,7 +144,7 @@ export default function BookDetail() {
       promises.push(publisherPromise);
       
       // Langue
-      let languagePromise = Promise.resolve(null);
+      let languagePromise: Promise<any> = Promise.resolve({ data: null, error: null });
       if (bookData.language_id) {
         languagePromise = supabase
           .from('languages')
@@ -154,7 +155,7 @@ export default function BookDetail() {
       promises.push(languagePromise);
       
       // Série
-      let seriesPromise = Promise.resolve(null);
+      let seriesPromise: Promise<any> = Promise.resolve({ data: null, error: null });
       if (bookData.series_id) {
         seriesPromise = supabase
           .from('series')
@@ -175,13 +176,13 @@ export default function BookDetail() {
       
       // Extraire les noms d'auteurs
       const authorNames = authorResponses
-        .filter(res => !res.error && res.data)
-        .map(res => res.data.author_name);
+        .filter((res: any) => !res.error && res.data)
+        .map((res: any) => res.data.author_name);
         
       // Extraire les noms de genres
       const genres = genreResponses
-        .filter(res => !res.error && res.data)
-        .map(res => res.data.genre_name);
+        .filter((res: any) => !res.error && res.data)
+        .map((res: any) => res.data.genre_name);
         
       // Extraire le nom de l'éditeur
       const publisher = publisherResponse && !publisherResponse.error 

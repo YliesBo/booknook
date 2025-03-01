@@ -6,7 +6,7 @@ export interface BookWithStatus {
     title: string;
     thumbnail: string | null;
     date_added: string;
-  }  
+}  
 
 export type ReadingStatus = 'to_read' | 'reading' | 'read' | 'abandoned';
 
@@ -18,7 +18,7 @@ export const readingStatusLabels: Record<ReadingStatus, string> = {
 };
 
 // Récupérer le statut de lecture d'un livre pour l'utilisateur courant
-export async function getReadingStatus(userId: string, bookId: string) {
+export async function getReadingStatus(userId: string, bookId: string): Promise<ReadingStatus | null> {
   if (!userId || !bookId) return null;
   
   const { data, error } = await supabase
@@ -92,15 +92,16 @@ export async function setReadingStatus(userId: string, bookId: string, status: R
   }
 }
 
-interface ReadingStatusData {
+// Interface pour représenter les données Supabase correctement
+interface SupabaseReadingStatusItem {
+  book_id: string;
+  date_added: string;
+  books: {
     book_id: string;
-    date_added: string;
-    books: {
-      book_id: string;
-      title: string;
-      thumbnail: string | null;
-    } | null;
-  }
+    title?: string | null;
+    thumbnail?: string | null;
+  } | null;
+}
 
 // Récupérer les livres ayant un statut spécifique
 export async function getBooksWithStatus(userId: string, status: ReadingStatus) {
@@ -122,26 +123,17 @@ export async function getBooksWithStatus(userId: string, status: ReadingStatus) 
       .eq('status', status);
       
     if (error) throw error;
+
+    // Typer correctement les données
+    const typedData = data as unknown as SupabaseReadingStatusItem[];
     
-    // Type plus robuste avec une interface explicite
-    interface SupabaseReadingStatusItem {
-      book_id: string;
-      date_added: string;
-      books: {
-        book_id: string;
-        title?: string;
-        thumbnail?: string | null;
-      } | null;
-    }
-    
-    const books: BookWithStatus[] = (data as SupabaseReadingStatusItem[] || [])
-      .filter((item): item is SupabaseReadingStatusItem & { books: NonNullable<SupabaseReadingStatusItem['books']> } => 
-        item.books !== null
-      )
+    // Transformer les données en format utilisable
+    const books: BookWithStatus[] = typedData
+      .filter(item => item.books !== null)
       .map(item => ({
         book_id: item.book_id,
-        title: item.books.title || 'Titre inconnu',
-        thumbnail: item.books.thumbnail || null,
+        title: item.books?.title || 'Titre inconnu',
+        thumbnail: item.books?.thumbnail || null,
         date_added: item.date_added
       }));
     

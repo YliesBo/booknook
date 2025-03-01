@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { FiBookmark, FiCheck, FiPlus, FiX } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase/supabaseClient';
 
 type Shelf = {
   shelf_id: string;
@@ -15,7 +16,7 @@ type ShelfSelectorProps = {
 };
 
 export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [shelves, setShelves] = useState<Shelf[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedShelves, setSelectedShelves] = useState<string[]>([]);
@@ -26,11 +27,11 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (user) {
+    if (user && session) {
       fetchShelves();
       fetchCurrentShelves();
     }
-  }, [user, bookId]);
+  }, [user, session, bookId]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -46,25 +47,22 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
   }, [onClose]);
 
   const fetchShelves = async () => {
-    if (!user) return;
+    if (!user || !session) return;
     
     setLoading(true);
     setError(null);
     
     try {
-      const response = await fetch('../../pages/api/shelves/get-user-shelves', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Fetch shelves directly using Supabase client
+      const { data, error } = await supabase
+        .from('shelves')
+        .select('shelf_id, shelf_name, is_system')
+        .eq('user_id', user.id)
+        .order('shelf_name');
+
+      if (error) throw error;
       
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      setShelves(result.shelves || []);
+      setShelves(data || []);
     } catch (error) {
       console.error('Erreur lors de la récupération des étagères :', error);
       setError('Impossible de charger vos étagères. Veuillez réessayer.');
@@ -74,30 +72,26 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
   };
 
   const fetchCurrentShelves = async () => {
-    if (!user || !bookId) return;
+    if (!user || !session || !bookId) return;
     
     try {
-      const response = await fetch(`../../pages/api/shelves/get-book-shelves?bookId=${bookId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Fetch book shelves directly using Supabase client
+      const { data, error } = await supabase
+        .from('bookshelves')
+        .select('shelf_id')
+        .eq('user_id', user.id)
+        .eq('book_id', bookId);
+
+      if (error) throw error;
       
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      setSelectedShelves(result.shelfIds || []);
+      setSelectedShelves(data?.map(item => item.shelf_id) || []);
     } catch (error) {
       console.error('Erreur lors de la vérification des étagères :', error);
-      // Ne pas afficher cette erreur à l'utilisateur, juste pour le logging
     }
   };
 
   const toggleShelf = async (shelfId: string) => {
-    if (!user || !bookId) return;
+    if (!user || !session || !bookId) return;
     
     setAddingToShelf(true);
     setError(null);
@@ -105,26 +99,33 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     try {
       const isSelected = selectedShelves.includes(shelfId);
       
-      const response = await fetch('../../pages/api/shelves/toggle-book-shelf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          bookId,
-          shelfId,
-          action: isSelected ? 'remove' : 'add'
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      // Mettre à jour l'état local
       if (isSelected) {
+        // Remove book from shelf
+        const { error } = await supabase
+          .from('bookshelves')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('book_id', bookId)
+          .eq('shelf_id', shelfId);
+
+        if (error) throw error;
+        
+        // Update local state
         setSelectedShelves(selectedShelves.filter(id => id !== shelfId));
       } else {
+        // Add book to shelf
+        const { error } = await supabase
+          .from('bookshelves')
+          .insert({
+            user_id: user.id,
+            book_id: bookId,
+            shelf_id: shelfId,
+            date_added: new Date().toISOString()
+          });
+
+        if (error) throw error;
+        
+        // Update local state
         setSelectedShelves([...selectedShelves, shelfId]);
       }
     } catch (error) {
@@ -136,30 +137,34 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
   };
 
   const createShelf = async () => {
-    if (!user || !newShelfName.trim()) return;
+    if (!user || !session || !newShelfName.trim()) return;
     
     setAddingToShelf(true);
     setError(null);
     
     try {
-      const response = await fetch('../../pages/api/shelves/create-shelf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          shelfName: newShelfName.trim()
+      // Create shelf directly using Supabase client
+      const { data, error } = await supabase
+        .from('shelves')
+        .insert({
+          user_id: user.id,
+          shelf_name: newShelfName.trim(),
+          is_system: false,
+          is_public: false,
+          created_at: new Date().toISOString()
         })
-      });
+        .select()
+        .single();
+
+      if (error) throw error;
       
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
+      // Add new shelf to local shelves state
+      setShelves([...shelves, {
+        shelf_id: data.shelf_id,
+        shelf_name: data.shelf_name,
+        is_system: data.is_system
+      }]);
       
-      const result = await response.json();
-      
-      // Ajouter la nouvelle étagère à la liste
-      setShelves([...shelves, result.shelf]);
       setNewShelfName('');
       setShowNewShelfInput(false);
     } catch (error) {
