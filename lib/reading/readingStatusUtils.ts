@@ -105,50 +105,50 @@ interface ReadingStatusData {
 
 // Récupérer les livres ayant un statut spécifique
 export async function getBooksWithStatus(userId: string, status: ReadingStatus) {
-    if (!userId) return { books: [] as BookWithStatus[], error: 'User ID est requis' };
-    
-    try {
-      const { data, error } = await supabase
-        .from('reading_status')
-        .select(`
+  if (!userId) return { books: [] as BookWithStatus[], error: 'User ID est requis' };
+  
+  try {
+    const { data, error } = await supabase
+      .from('reading_status')
+      .select(`
+        book_id,
+        date_added,
+        books (
           book_id,
-          date_added,
-          books (
-            book_id,
-            title,
-            thumbnail
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('status', status);
-        
-      if (error) throw error;
+          title,
+          thumbnail
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('status', status);
       
-      // Définir un type explicite pour data
-      interface ReadingStatusData {
+    if (error) throw error;
+    
+    // Type plus robuste avec une interface explicite
+    interface SupabaseReadingStatusItem {
+      book_id: string;
+      date_added: string;
+      books: {
         book_id: string;
-        date_added: string;
-        books: {
-          book_id: string;
-          title: string;
-          thumbnail: string | null;
-        } | null;
-      }
-      
-      // Utiliser une assertion de type pour indiquer à TypeScript la structure des données
-      const typedData = data as ReadingStatusData[] || [];
-      
-      // Transformer les données avec gestion des valeurs null/undefined
-      const books = typedData.map(item => ({
+        title?: string;
+        thumbnail?: string | null;
+      } | null;
+    }
+    
+    const books: BookWithStatus[] = (data as SupabaseReadingStatusItem[] || [])
+      .filter((item): item is SupabaseReadingStatusItem & { books: NonNullable<SupabaseReadingStatusItem['books']> } => 
+        item.books !== null
+      )
+      .map(item => ({
         book_id: item.book_id,
-        title: item.books?.title || 'Titre inconnu',
-        thumbnail: item.books?.thumbnail || null,
+        title: item.books.title || 'Titre inconnu',
+        thumbnail: item.books.thumbnail || null,
         date_added: item.date_added
       }));
-      
-      return { books, error: null };
-    } catch (error: any) {
-      console.error(`Erreur lors de la récupération des livres avec statut ${status}:`, error);
-      return { books: [] as BookWithStatus[], error: error.message || 'Une erreur est survenue' };
-    }
+    
+    return { books, error: null };
+  } catch (error: any) {
+    console.error(`Erreur lors de la récupération des livres avec statut ${status}:`, error);
+    return { books: [] as BookWithStatus[], error: error.message || 'Une erreur est survenue' };
   }
+}
