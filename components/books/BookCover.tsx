@@ -1,4 +1,3 @@
-// components/books/BookCover.tsx
 import { useState, useEffect } from 'react';
 import { getOpenLibraryCoverByISBN } from '../../lib/api/openLibraryApi';
 
@@ -19,39 +18,34 @@ export default function BookCover({
   className = '', 
   aspectRatio = 'aspect-[2/3]' 
 }: BookCoverProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(thumbnail);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   
   useEffect(() => {
-    // Si l'image d'origine n'est pas disponible ou a généré une erreur, essayer Open Library
-    if ((!thumbnail || imageError) && (isbn10 || isbn13)) {
-      const tryOpenLibrary = async () => {
-        // Essayer d'abord avec ISBN-13
-        if (isbn13) {
-          const url = getOpenLibraryCoverByISBN(isbn13, 'L');
-          if (url) {
-            setImageUrl(url);
-            return;
-          }
+    const fetchBestCover = async () => {
+      // Chercher d'abord sur Open Library
+      if (isbn13) {
+        const openLibraryCover = getOpenLibraryCoverByISBN(isbn13, 'L');
+        if (openLibraryCover) {
+          setImageUrl(openLibraryCover);
+          return;
         }
-        
-        // Puis avec ISBN-10
-        if (isbn10) {
-          const url = getOpenLibraryCoverByISBN(isbn10, 'L');
-          if (url) {
-            setImageUrl(url);
-            return;
-          }
+      }
+
+      if (isbn10) {
+        const openLibraryCover = getOpenLibraryCoverByISBN(isbn10, 'L');
+        if (openLibraryCover) {
+          setImageUrl(openLibraryCover);
+          return;
         }
-      };
-      
-      tryOpenLibrary();
-    }
-  }, [thumbnail, imageError, isbn10, isbn13]);
-  
-  const handleImageError = () => {
-    setImageError(true);
-  };
+      }
+
+      // Fallback sur la miniature Google Books
+      setImageUrl(thumbnail);
+    };
+
+    fetchBestCover();
+  }, [thumbnail, isbn10, isbn13]);
   
   return (
     <div className={`bg-gray-200 ${aspectRatio} relative ${className}`}>
@@ -60,7 +54,7 @@ export default function BookCover({
           src={imageUrl} 
           alt={title}
           className="object-cover w-full h-full"
-          onError={handleImageError}
+          onError={() => setImageUrl(thumbnail)}
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-gray-400">

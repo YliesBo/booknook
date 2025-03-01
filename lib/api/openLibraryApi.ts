@@ -59,29 +59,29 @@ export async function getBestCoverImage(
   isbn10: string | null, 
   isbn13: string | null
 ): Promise<string | null> {
-  // Essayer d'abord avec Google Books si disponible
-  if (googleBooksCover) {
-    // Améliorer la qualité de l'URL Google Books
-    const betterGoogleCover = googleBooksCover.replace(/&zoom=\d+/, '&zoom=1');
-    return betterGoogleCover;
-  }
-  
-  // Essayer avec ISBN-13 sur Open Library
+  // Essayer d'abord Open Library avec ISBN-13 et ISBN-10
   if (isbn13) {
     const openLibraryCover = getOpenLibraryCoverByISBN(isbn13, 'L');
     if (openLibraryCover && await isValidCoverImage(openLibraryCover)) {
       return openLibraryCover;
     }
   }
-  
-  // Essayer avec ISBN-10 sur Open Library
+
   if (isbn10) {
     const openLibraryCover = getOpenLibraryCoverByISBN(isbn10, 'L');
     if (openLibraryCover && await isValidCoverImage(openLibraryCover)) {
       return openLibraryCover;
     }
   }
-  
-  // Retourner null si aucune couverture valide trouvée
+
+  // Si Open Library n'a pas de couverture, utiliser Google Books
+  if (googleBooksCover) {
+    const betterGoogleCover = googleBooksCover
+      .replace(/&zoom=\d+/, '&zoom=1')
+      .replace('http://', 'https://');
+    
+    return betterGoogleCover;
+  }
+
   return null;
 }
