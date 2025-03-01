@@ -82,10 +82,10 @@ export default function Profile() {
       
       // Récupérer les étagères personnalisées
       const { data: customShelves } = await supabase
-        .from('shelves')
-        .select('shelf_id, shelf_name')
-        .eq('user_id', user.id)
-        .eq('is_system', false);
+      .from('shelves')
+      .select('shelf_id, shelf_name')
+      .eq('user_id', user.id)
+      .eq('is_system', false);
         
       // Mettre à jour les statistiques
       setStats(prevStats => ({
@@ -480,48 +480,6 @@ export default function Profile() {
   </div>
   
   {/* Étagères personnalisées */}
-  <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
-  {/* Ajouter ici la liste des étagères personnalisées */}
-</div>
-        
-        <div>
-          <h2 className="text-xl font-bold mb-4">Activité récente</h2>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            {recentActivity.length > 0 ? (
-              <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
-                  <div key={index} className="flex items-start border-b pb-4 last:border-b-0 last:pb-0">
-                    <div className="flex-shrink-0 w-10 h-14 bg-gray-200 rounded overflow-hidden mr-3">
-                      {activity.book.thumbnail && (
-                        <img 
-                          src={activity.book.thumbnail} 
-                          alt={activity.book.title}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <Link href={`/book/${activity.book.book_id}`} className="font-medium hover:text-blue-600">
-                        {activity.book.title}
-                      </Link>
-                      <p className="text-sm text-gray-600">
-                        {activity.type === 'added_to_shelf' 
-                          ? `Ajouté à l'étagère "${activity.shelfName}"` 
-                          : `Noté ${activity.rating}/5`}
-                      </p>
-                      <p className="text-xs text-gray-500">{formatDate(activity.date)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-gray-500 py-4">
-                Aucune activité récente à afficher.
-              </p>
-            )}
-          </div>
-        </div>
-        <div>
   <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
   <div className="bg-white rounded-lg shadow-md overflow-hidden">
     {customShelves.length > 0 ? (
