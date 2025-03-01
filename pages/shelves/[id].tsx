@@ -181,10 +181,10 @@ export default function ShelfDetail() {
       ) : (
         <div>
           {books.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {books.map((book) => (
-                <div key={book.book_id} className="relative group rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                  <Link href={`/book/${book.book_id}`}>
+           <div className="book-grid">
+           {books.map((book) => (
+             <div key={book.book_id} className="relative group rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+               <Link href={`/book/${book.book_id}`}>
                     <div className="aspect-[2/3] bg-gray-200 relative">
                       {book.thumbnail && (
                         <img 
@@ -206,13 +206,13 @@ export default function ShelfDetail() {
                   
                   {/* Bouton de suppression au survol */}
                   <button
-                    className="absolute top-0 right-0 p-1 m-2 bg-black bg-opacity-50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeBookFromShelf(book.book_id)}
-                    title="Retirer de l'étagère"
-                  >
-                    <FiTrash2 size={16} />
-                  </button>
-                </div>
+        className="absolute top-0 right-0 p-1 m-2 bg-black bg-opacity-50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={() => removeBookFromShelf(book.book_id)}
+        title="Retirer de l'étagère"
+      >
+        <FiTrash2 size={16} />
+      </button>
+    </div>
               ))}
             </div>
           ) : (

@@ -1,38 +1,19 @@
+// lib/hooks/useCoverImage.ts
 import { useState, useEffect } from 'react';
-import { getOpenLibraryCoverByISBN } from '../api/openLibraryApi';
+import { getEnhancedGoogleBooksCover } from '../api/coverImageUtils';
 
 export function useCoverImage(
   thumbnail: string | null,
-  isbn10?: string | null,
-  isbn13?: string | null
+  isbn10?: string | null, // Gardons ces paramètres pour compatibilité
+  isbn13?: string | null  // mais ne les utilisons plus
 ): string | null {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchBestCover = async () => {
-      // Chercher d'abord sur Open Library
-      if (isbn13) {
-        const openLibraryCover = getOpenLibraryCoverByISBN(isbn13, 'L');
-        if (openLibraryCover) {
-          setImageUrl(openLibraryCover);
-          return;
-        }
-      }
-
-      if (isbn10) {
-        const openLibraryCover = getOpenLibraryCoverByISBN(isbn10, 'L');
-        if (openLibraryCover) {
-          setImageUrl(openLibraryCover);
-          return;
-        }
-      }
-
-      // Fallback sur la miniature Google Books
-      setImageUrl(thumbnail);
-    };
-
-    fetchBestCover();
-  }, [thumbnail, isbn10, isbn13]);
+    // Plus de requêtes à OpenLibrary, juste améliorer l'URL Google Books
+    const enhancedCover = getEnhancedGoogleBooksCover(thumbnail);
+    setImageUrl(enhancedCover || thumbnail);
+  }, [thumbnail]);
 
   return imageUrl;
 }

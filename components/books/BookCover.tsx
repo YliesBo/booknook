@@ -1,66 +1,47 @@
+// components/books/BookCover.tsx
 import { useState, useEffect } from 'react';
-import { getOpenLibraryCoverByISBN } from '../../lib/api/openLibraryApi';
+import { getEnhancedGoogleBooksCover } from '../../lib/api/coverImageUtils';
 
 type BookCoverProps = {
   thumbnail: string | null;
-  isbn10?: string | null;
+  isbn10?: string | null; 
   isbn13?: string | null;
   title: string;
   className?: string;
-  aspectRatio?: string;
+  children?: React.ReactNode;
 };
 
 export default function BookCover({ 
   thumbnail, 
-  isbn10, 
-  isbn13, 
   title, 
   className = '', 
-  aspectRatio = 'aspect-[2/3]' 
+  children,
+  isbn10, 
+  isbn13 
 }: BookCoverProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   
   useEffect(() => {
-    const fetchBestCover = async () => {
-      // Chercher d'abord sur Open Library
-      if (isbn13) {
-        const openLibraryCover = getOpenLibraryCoverByISBN(isbn13, 'L');
-        if (openLibraryCover) {
-          setImageUrl(openLibraryCover);
-          return;
-        }
-      }
-
-      if (isbn10) {
-        const openLibraryCover = getOpenLibraryCoverByISBN(isbn10, 'L');
-        if (openLibraryCover) {
-          setImageUrl(openLibraryCover);
-          return;
-        }
-      }
-
-      // Fallback sur la miniature Google Books
-      setImageUrl(thumbnail);
-    };
-
-    fetchBestCover();
-  }, [thumbnail, isbn10, isbn13]);
+    const enhancedCover = getEnhancedGoogleBooksCover(thumbnail);
+    setImageUrl(enhancedCover || thumbnail);
+  }, [thumbnail]);
   
   return (
-    <div className={`bg-gray-200 ${aspectRatio} relative ${className}`}>
-      {imageUrl ? (
+    <div className={`bg-gray-100 relative rounded-2xl overflow-hidden h-full flex items-center justify-center ${className}`}>
+      {imageUrl && !imageError ? (
         <img 
           src={imageUrl} 
           alt={title}
-          className="object-cover w-full h-full"
-          onError={() => setImageUrl(thumbnail)}
+          className="w-full h-auto object-contain"
+          onError={() => setImageError(true)}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-gray-400">
-          <span className="text-xs text-center px-2">{title}</span>
+        <div className="w-full h-full min-h-[200px] flex items-center justify-center text-gray-400 p-4">
+          <span className="text-xs text-center">{title}</span>
         </div>
       )}
+      {children}
     </div>
   );
 }

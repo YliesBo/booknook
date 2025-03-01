@@ -249,19 +249,19 @@ export default function Home() {
   <div key={category.id}>
     <h2 className="text-xl font-bold mb-4">{category.name}</h2>
     
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      {category.books.map((book) => (
-        <BookCard 
-          key={book.book_id} 
-          book={{
-            id: book.book_id,
-            title: book.title,
-            authors: book.authorNames,
-            thumbnail: book.thumbnail
-          }}
-        />
-      ))}
-    </div>
+    <div className="book-grid">
+  {category.books.map((book) => (
+    <BookCard 
+      key={book.book_id} 
+      book={{
+        id: book.book_id,
+        title: book.title,
+        authors: book.authorNames,
+        thumbnail: book.thumbnail
+      }}
+    />
+  ))}
+</div>
   </div>
 ))}
           

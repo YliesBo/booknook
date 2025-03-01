@@ -1,7 +1,8 @@
+// components/layout/Layout.tsx
 import React, { ReactNode } from 'react';
 import Head from 'next/head';
 import Navbar from './Navbar';
-import Sidebar from './Sidebar';
+import Sidebar from './SideBar';
 import SearchBar from './SearchBar';
 import MobileNavbar from './MobileNavbar';
 import { useAuth } from '../../context/AuthContext';
@@ -34,9 +35,9 @@ export default function Layout({ children, title = 'LAPAGE - Votre bibliothèque
       <Sidebar />
 
       {/* Main content area with top navbar */}
-      <div className="flex-1 ml-64">
+      <div className="flex-1 ml-[72px]">
         {/* Top navbar with search and account */}
-        <header className="fixed top-0 left-64 right-0 bg-white shadow-sm z-20 h-16 flex items-center px-6">
+        <header className="fixed top-0 left-[72px] right-0 bg-white shadow-sm z-20 h-16 flex items-center px-6">
           <SearchBar />
           
           <Navbar />

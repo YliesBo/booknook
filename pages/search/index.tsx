@@ -126,31 +126,8 @@ export default function Search() {
   }, [results, filterBy, sortBy]);
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4">
-      <h1 className="text-2xl font-bold mb-6">Recherche</h1>
-      
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher des livres, des auteurs..."
-            className="w-full p-3 pl-10 text-gray-700 bg-white border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiSearch className="text-gray-400" />
-          </div>
-          <button
-            type="submit"
-            className="absolute right-2 top-2 bg-blue-500 text-white px-4 py-1 rounded-full hover:bg-blue-600"
-          >
-            Rechercher
-          </button>
-        </div>
-      </form>
-
-      {/* Suggestions de recherche (genres, etc.) */}
+    <div className="w-full">
+      {/* Si aucune recherche n'a été faite, nous affichons les suggestions */}
       {!q && (
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-lg text-white">
@@ -168,9 +145,9 @@ export default function Search() {
       {q && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">
-              Résultats pour "{q}"
-            </h2>
+            <div className="text-gray-600">
+              Résultats pour <span className="font-semibold">"{q}"</span>
+            </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center text-sm text-gray-600 hover:text-gray-900"
@@ -223,7 +200,7 @@ export default function Search() {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            <div className="book-grid">
               {displayResults().length > 0 ? (
                 displayResults().map((result) => (
                   <BookCard

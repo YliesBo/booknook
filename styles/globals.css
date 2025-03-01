@@ -24,9 +24,18 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Onest, Arial, Helvetica, sans-serif;
 }
 
 .main-content-with-sidebar {
   margin-left: 256px; /* correspond à la largeur de la sidebar */
+}
+
+/* styles/globals.css - ajoutez ceci à la fin du fichier */
+@layer utilities {
+  .book-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
 }

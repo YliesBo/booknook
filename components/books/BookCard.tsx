@@ -9,8 +9,6 @@ import { getReadingStatus, setReadingStatus, readingStatusLabels, ReadingStatus 
 import { supabase } from '../../lib/supabase/supabaseClient';
 import BookCover from './BookCover';
 
-
-
 type BookCardProps = {
   book: {
     id: string;
@@ -32,6 +30,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [readingStatus, setReadingStatusState] = useState<ReadingStatus | null>(null);
+
   
   // Gestion du survol (desktop)
   const handleMouseEnter = () => {
@@ -215,112 +214,112 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   return (
     <div 
       ref={cardRef}
-      className="relative group rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
+      className="flex flex-col h-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Link 
-        href={book.source === 'google_books' ? '#' : `/book/${book.id}`}
-        onClick={handleLinkClick}
-      >
-        <div 
-  className="relative"
-  onTouchStart={handleTouchStart}
-  onTouchEnd={handleTouchEnd}
-  onTouchMove={handleTouchMove}
->
-  <BookCover
-    thumbnail={book.thumbnail}
-    title={book.title}
-  />
+      <div className="relative mb-3 flex-grow">
+        <Link 
+          href={book.source === 'google_books' ? '#' : `/book/${book.id}`}
+          onClick={handleLinkClick}
+        >
+          <div 
+            className="relative"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
+          >
+            <BookCover
+              thumbnail={book.thumbnail}
+              title={book.title}
+            />
 
-{readingStatus && (
-            <div className={`absolute top-2 right-2 rounded-full px-2 py-1 text-xs font-medium ${
-              readingStatus === 'to_read' ? 'bg-blue-500 text-white' :
-              readingStatus === 'reading' ? 'bg-green-500 text-white' :
-              readingStatus === 'read' ? 'bg-purple-500 text-white' :
-              'bg-red-500 text-white'
-            }`}>
-              {readingStatusLabels[readingStatus]}
-            </div>
-          )}
-          
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-              <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
-            </div>
-          )}
-          
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-              <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
-            </div>
-          )}
-          
-          {/* Overlay et boutons d'action */}
-          {showButtons && !showShelfSelector && (
-            <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-              <div className="flex space-x-2 p-1">
-                {/* Bouton "À lire" */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleReadingStatus('to_read');
-                  }}
-                  className="bg-blue-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
-                  title="Marquer comme à lire"
-                >
-                  <FiPlus size={18} />
-                </button>
-                
-                {/* Bouton "En cours" */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleReadingStatus('reading');
-                  }}
-                  className="bg-green-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
-                  title="Marquer comme en cours"
-                >
-                  <FiClock size={18} />
-                </button>
-                
-                {/* Bouton "Lu" */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleReadingStatus('read');
-                  }}
-                  className="bg-purple-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
-                  title="Marquer comme lu"
-                >
-                  <FiCheck size={18} />
-                </button>
-                
-                {/* Bouton "Ajouter à une étagère" */}
-                <button
-                  onClick={handleAddToShelf}
-                  className="bg-yellow-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
-                  title="Ajouter à une étagère"
-                >
-                  <FiBookmark size={18} />
-                </button>
+            {readingStatus && (
+              <div className={`absolute top-2 right-2 rounded-full px-2 py-1 text-xs font-medium ${
+                readingStatus === 'to_read' ? 'bg-blue-500 text-white' :
+                readingStatus === 'reading' ? 'bg-green-500 text-white' :
+                readingStatus === 'read' ? 'bg-purple-500 text-white' :
+                'bg-red-500 text-white'
+              }`}>
+                {readingStatusLabels[readingStatus]}
               </div>
-            </div>
-          )}
-        </div>
-        <div className="p-2">
-  <h3 className="font-medium text-sm line-clamp-1 text-gray-800">{book.title}</h3>
-  <p className="text-xs text-gray-600 line-clamp-1">
-    {book.authors.length > 0 
-      ? book.authors.join(', ') 
-      : 'Auteur inconnu'}
-  </p>
-</div>
-      </Link>
+            )}
+            
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-2xl">
+                <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+              </div>
+            )}
+          
+            {/* Overlay et boutons d'action */}
+            {showButtons && !showShelfSelector && (
+              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center rounded-2xl">
+                <div className="flex space-x-2 p-1">
+                  {/* Bouton "À lire" */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleReadingStatus('to_read');
+                    }}
+                    className="bg-blue-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                    title="Marquer comme à lire"
+                  >
+                    <FiPlus size={18} />
+                  </button>
+                  
+                  {/* Bouton "En cours" */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleReadingStatus('reading');
+                    }}
+                    className="bg-green-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                    title="Marquer comme en cours"
+                  >
+                    <FiClock size={18} />
+                  </button>
+                  
+                  {/* Bouton "Lu" */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleReadingStatus('read');
+                    }}
+                    className="bg-purple-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                    title="Marquer comme lu"
+                  >
+                    <FiCheck size={18} />
+                  </button>
+                  
+                  {/* Bouton "Ajouter à une étagère" */}
+                  <button
+                    onClick={handleAddToShelf}
+                    className="bg-yellow-500 text-white rounded-full p-2 transform transition-transform duration-200 hover:scale-110"
+                    title="Ajouter à une étagère"
+                  >
+                    <FiBookmark size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Link>
+      </div>
+
+      {/* Titre et auteur en dessous de la couverture */}
+      <div className="mt-auto">
+        <Link href={book.source === 'google_books' ? '#' : `/book/${book.id}`} onClick={handleLinkClick}>
+          <h3 className="font-medium text-sm line-clamp-1 text-gray-800">{book.title}</h3>
+          <p className="text-xs text-gray-600 line-clamp-1">
+            {book.authors.length > 0 
+              ? book.authors.join(', ') 
+              : 'Auteur inconnu'}
+          </p>
+        </Link>
+      </div>
 
       {showShelfSelector && (
         <div className="absolute z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">

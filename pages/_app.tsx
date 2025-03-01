@@ -1,4 +1,6 @@
+// pages/_app.tsx
 import '../styles/globals.css';
+import { onest } from '../lib/fonts';
 import type { AppProps } from 'next/app';
 import { AuthProvider } from '../context/AuthContext';
 import Layout from '../components/layout/Layout';
@@ -10,15 +12,17 @@ function MyApp({ Component, pageProps }: AppProps) {
                     Component.displayName === 'ConfirmEmailPage';
 
   return (
-    <AuthProvider>
-      {isAuthPage ? (
-        <Component {...pageProps} />
-      ) : (
-        <Layout>
+    <div className={onest.variable}>
+      <AuthProvider>
+        {isAuthPage ? (
           <Component {...pageProps} />
-        </Layout>
-      )}
-    </AuthProvider>
+        ) : (
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        )}
+      </AuthProvider>
+    </div>
   );
 }
 

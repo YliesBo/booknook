@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import { getBookDetails } from '../../lib/api/googleBooksApi';
-import { getBestCoverImage } from '../../lib/api/openLibraryApi';
+import { getEnhancedGoogleBooksCover } from '../../lib/api/coverImageUtils';
 
 export default async function handler(
   req: NextApiRequest,
@@ -173,30 +173,27 @@ export default async function handler(
 
     // Créer le livre avec toutes les informations recueillies
     // Récupérer la meilleure couverture disponible
-    const bestCover = await getBestCoverImage(
-      bookDetails.volumeInfo.imageLinks?.thumbnail || null,
-      isbn10,
-      isbn13
-    );
+    const thumbnail = bookDetails.volumeInfo.imageLinks?.thumbnail || null;
+const enhancedCover = getEnhancedGoogleBooksCover(thumbnail);
     
-    const { data: newBook, error: bookError } = await supabase
-      .from('books')
-      .insert({
-        title: bookDetails.volumeInfo.title || 'Titre inconnu',
-        google_book_id: googleBookId,
-        synopsis: bookDetails.volumeInfo.description || null,
-        published_date: bookDetails.volumeInfo.publishedDate || null,
-        page_count: bookDetails.volumeInfo.pageCount || null,
-        thumbnail: bestCover,
-        isbn_10: isbn10,
-        isbn_13: isbn13,
-        publisher_id: publisherId,
-        language_id: languageId,
-        series_id: seriesId,
-        series_release_number: seriesReleaseNumber
-      })
-      .select()
-      .single();
+const { data: newBook, error: bookError } = await supabase
+.from('books')
+.insert({
+  title: bookDetails.volumeInfo.title || 'Titre inconnu',
+  google_book_id: googleBookId,
+  synopsis: bookDetails.volumeInfo.description || null,
+  published_date: bookDetails.volumeInfo.publishedDate || null,
+  page_count: bookDetails.volumeInfo.pageCount || null,
+  thumbnail: enhancedCover, // Utilisez enhancedCover ici
+  isbn_10: isbn10,
+  isbn_13: isbn13,
+  publisher_id: publisherId,
+  language_id: languageId,
+  series_id: seriesId,
+  series_release_number: seriesReleaseNumber
+})
+.select()
+.single();
 
     if (bookError) {
       console.error('Error inserting book:', bookError);
