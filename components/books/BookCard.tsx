@@ -7,6 +7,8 @@ import ShelfSelector from '../shelves/ShelfSelector';
 import { useAuth } from '../../context/AuthContext';
 import { getReadingStatus, setReadingStatus, readingStatusLabels, ReadingStatus } from '../../lib/reading/readingStatusUtils';
 import { supabase } from '../../lib/supabase/supabaseClient';
+import BookCover from './BookCover';
+
 
 
 type BookCardProps = {
@@ -222,18 +224,15 @@ export default function BookCard({ book, onImport }: BookCardProps) {
         onClick={handleLinkClick}
       >
         <div 
-          className="aspect-[2/3] bg-gray-200 relative"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onTouchMove={handleTouchMove}
-        >
-          {book.thumbnail && (
-            <img 
-              src={book.thumbnail} 
-              alt={book.title}
-              className="object-cover w-full h-full"
-            />
-          )}
+  className="relative"
+  onTouchStart={handleTouchStart}
+  onTouchEnd={handleTouchEnd}
+  onTouchMove={handleTouchMove}
+>
+  <BookCover
+    thumbnail={book.thumbnail}
+    title={book.title}
+  />
 
 {readingStatus && (
             <div className={`absolute top-2 right-2 rounded-full px-2 py-1 text-xs font-medium ${

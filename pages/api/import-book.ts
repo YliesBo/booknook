@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import { getBookDetails } from '../../lib/api/googleBooksApi';
+import { getBestCoverImage } from '../../lib/api/openLibraryApi';
 
 export default async function handler(
   req: NextApiRequest,
@@ -171,6 +172,13 @@ export default async function handler(
     console.log('Creating book with language_id:', languageId);
 
     // Créer le livre avec toutes les informations recueillies
+    // Récupérer la meilleure couverture disponible
+    const bestCover = await getBestCoverImage(
+      bookDetails.volumeInfo.imageLinks?.thumbnail || null,
+      isbn10,
+      isbn13
+    );
+    
     const { data: newBook, error: bookError } = await supabase
       .from('books')
       .insert({
@@ -179,7 +187,7 @@ export default async function handler(
         synopsis: bookDetails.volumeInfo.description || null,
         published_date: bookDetails.volumeInfo.publishedDate || null,
         page_count: bookDetails.volumeInfo.pageCount || null,
-        thumbnail: bookDetails.volumeInfo.imageLinks?.thumbnail || null,
+        thumbnail: bestCover,
         isbn_10: isbn10,
         isbn_13: isbn13,
         publisher_id: publisherId,

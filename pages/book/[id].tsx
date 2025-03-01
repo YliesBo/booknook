@@ -10,6 +10,7 @@ import ReviewForm from '../../components/books/ReviewForm';
 import ReviewList from '../../components/books/ReviewList';
 import ReadingStatusSelector from '../../components/books/ReadingStatusSelector';
 import { getReadingStatus, readingStatusLabels, ReadingStatus } from '../../lib/reading/readingStatusUtils';
+import BookCover from '../../components/books/BookCover';
 
 // Types pour les données du livre
 type BookDetail = {
@@ -223,14 +224,14 @@ export default function BookDetail() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Couverture du livre */}
         <div className="w-full md:w-1/3">
-          <div className="rounded-lg overflow-hidden shadow-md bg-gray-200 aspect-[2/3] relative">
-            {book.thumbnail && (
-              <img 
-                src={book.thumbnail} 
-                alt={book.title}
-                className="object-cover w-full h-full"
-              />
-            )}
+        <div className="rounded-lg overflow-hidden shadow-md relative">
+  <BookCover
+    thumbnail={book.thumbnail}
+    isbn10={book.isbn_10}
+    isbn13={book.isbn_13}
+    title={book.title}
+    className="rounded-lg"
+  />
             
             {/* Badge pour indiquer le statut de lecture */}
             {readingStatus && (

@@ -1,6 +1,8 @@
 import React, { ReactNode } from 'react';
 import Head from 'next/head';
 import Navbar from './Navbar';
+import Sidebar from './Sidebar';
+import SearchBar from './SearchBar';
 import MobileNavbar from './MobileNavbar';
 import { useAuth } from '../../context/AuthContext';
 
@@ -10,7 +12,7 @@ type LayoutProps = {
 };
 
 export default function Layout({ children, title = 'LAPAGE - Votre bibliothèque personnelle' }: LayoutProps) {
-  const { isLoading } = useAuth();
+  const { isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -21,20 +23,32 @@ export default function Layout({ children, title = 'LAPAGE - Votre bibliothèque
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex bg-gray-50">
       <Head>
         <title>{title}</title>
         <meta charSet="utf-8" />
         <meta name="viewport" content="initial-scale=1.0, width=device-width" />
       </Head>
 
-      <Navbar />
-      
-      <main className="flex-grow container mx-auto px-4 sm:px-6 pb-16 pt-20">
-        {children}
-      </main>
+      {/* Sidebar */}
+      <Sidebar />
 
-      <MobileNavbar />
+      {/* Main content area with top navbar */}
+      <div className="flex-1 ml-64">
+        {/* Top navbar with search and account */}
+        <header className="fixed top-0 left-64 right-0 bg-white shadow-sm z-20 h-16 flex items-center px-6">
+          <SearchBar />
+          
+          <Navbar />
+        </header>
+        
+        {/* Main content area with padding for navbar */}
+        <main className="pt-20 px-6">
+          {children}
+        </main>
+
+        <MobileNavbar />
+      </div>
     </div>
   );
 }
