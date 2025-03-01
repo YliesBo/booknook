@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase/supabaseClient';
 import Link from 'next/link';
 import { updateUsername, updateBio, getUserProfile } from '../../lib/users/userUtils';
 import { readingStatusLabels, getBooksWithStatus } from '../../lib/reading/readingStatusUtils';
-import { FiEdit2, FiBookOpen, FiBook, FiClock, FiPauseCircle, FiCheckCircle, FiX } from 'react-icons/fi';
+import { FiEdit2, FiBookOpen, FiBook, FiClock, FiBookmark, FiPauseCircle, FiCheckCircle, FiX } from 'react-icons/fi';
 
 
 type UserStats = {
@@ -80,21 +80,34 @@ export default function Profile() {
       const readData = await getBooksWithStatus(user.id, 'read');
       const abandonedData = await getBooksWithStatus(user.id, 'abandoned');
       
+      // Récupérer les étagères personnalisées
+      const { data: customShelves } = await supabase
+        .from('shelves')
+        .select('shelf_id, shelf_name')
+        .eq('user_id', user.id)
+        .eq('is_system', false);
+        
       // Mettre à jour les statistiques
       setStats(prevStats => ({
         ...prevStats,
         toReadCount: toReadData.books.length,
         readingCount: readingData.books.length,
         readCount: readData.books.length,
-        abandonedCount: abandonedData.books.length,
-        totalBooks: toReadData.books.length + readingData.books.length + 
-                    readData.books.length + abandonedData.books.length + 
-                    prevStats.totalBooks, // Ajouter le nombre de livres sur les étagères personnalisées
+        abandonedCount: abandonedData.books.length
       }));
+      
+      // Mettre à jour les étagères personnalisées
+      if (customShelves) {
+        setCustomShelves(customShelves);
+      }
+      
     } catch (error) {
       console.error('Erreur lors de la récupération des statuts de lecture:', error);
     }
   };
+  
+
+  const [customShelves, setCustomShelves] = useState<any[]>([]);
 
   const fetchUserProfile = async () => {
     try {
@@ -508,6 +521,30 @@ export default function Profile() {
             )}
           </div>
         </div>
+        <div>
+  <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
+  <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    {customShelves.length > 0 ? (
+      customShelves.map((shelf) => (
+        <Link key={shelf.shelf_id} href={`/shelves/${shelf.shelf_id}`}>
+          <div className="p-4 flex items-center justify-between border-b last:border-b-0 hover:bg-gray-50">
+            <div className="flex items-center">
+              <FiBookmark className="text-gray-500 mr-3" />
+              <span>{shelf.shelf_name}</span>
+            </div>
+            <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+              {/* Vous pouvez ajouter le comptage des livres ici si nécessaire */}
+            </span>
+          </div>
+        </Link>
+      ))
+    ) : (
+      <p className="p-4 text-center text-gray-500">
+        Vous n'avez pas encore créé d'étagères personnalisées.
+      </p>
+    )}
+  </div>
+</div>
       </div>
     </div>
   );

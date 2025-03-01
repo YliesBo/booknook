@@ -53,23 +53,22 @@ export async function setReadingStatus(userId: string, bookId: string, status: R
       return { success: true };
     }
     
-    // Vérifier si un statut existe déjà
+    // Vérifier si un statut existe déjà pour ce livre (quelle que soit la valeur)
     const { data: existingStatus } = await supabase
       .from('reading_status')
       .select('status_id')
       .eq('user_id', userId)
-      .eq('book_id', bookId)
-      .single();
+      .eq('book_id', bookId);
     
-    if (existingStatus) {
-      // Mettre à jour le statut existant
+    if (existingStatus && existingStatus.length > 0) {
+      // Mettre à jour le statut existant au lieu d'en créer un nouveau
       const { error } = await supabase
         .from('reading_status')
         .update({ 
           status,
-          date_added: new Date().toISOString() 
+          date_updated: new Date().toISOString() 
         })
-        .eq('status_id', existingStatus.status_id);
+        .eq('status_id', existingStatus[0].status_id);
         
       if (error) throw error;
     } else {

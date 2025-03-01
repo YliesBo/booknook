@@ -65,8 +65,8 @@ export default function BookDetail() {
   const fetchBookDetails = async (bookId: string) => {
     setLoading(true);
     try {
-      // Récupérer les détails du livre
-      const { data: bookData, error: bookError } = await supabase
+      // Utiliser des requêtes en parallèle au lieu de requêtes séquentielles
+      const bookPromise = supabase
         .from('books')
         .select(`
           book_id,
@@ -84,121 +84,119 @@ export default function BookDetail() {
         `)
         .eq('book_id', bookId)
         .single();
-  
-      if (bookError) {
-        console.error('Erreur lors de la récupération du livre:', bookError);
-        throw bookError;
-      }
-  
-      console.log('Book data received:', bookData);
-  
-      // Récupérer les auteurs
-      const { data: authorsData, error: authorsError } = await supabase
+        
+      const authorsPromise = supabase
         .from('book_authors')
         .select('author_id')
         .eq('book_id', bookId);
-  
-      if (authorsError) throw authorsError;
-  
-      // Récupérer les noms d'auteurs
-      const authorNames: string[] = [];
-      for (const authorEntry of authorsData || []) {
-        if (authorEntry.author_id) {
-          try {
-            const { data: authorData, error: authorError } = await supabase
-              .from('authors')
-              .select('author_name')
-              .eq('author_id', authorEntry.author_id)
-              .single();
-            
-            if (authorError) {
-              console.error('Erreur lors de la récupération de l\'auteur:', authorError);
-              continue;
-            }
-            
-            if (authorData && authorData.author_name) {
-              authorNames.push(authorData.author_name);
-            }
-          } catch (error) {
-            console.error('Erreur lors du traitement de l\'auteur:', error);
-          }
-        }
-      }
-  
-      // Récupérer les genres
-      const { data: genresData, error: genresError } = await supabase
+        
+      const genresPromise = supabase
         .from('books_genres')
         .select('genre_id')
         .eq('book_id', bookId);
-  
-      if (genresError) throw genresError;
-  
-      // Récupérer les noms de genres
-      const genres: string[] = [];
-      for (const genreEntry of genresData || []) {
-        if (genreEntry.genre_id) {
-          const { data: genreData } = await supabase
-            .from('genres')
-            .select('genre_name')
-            .eq('genre_id', genreEntry.genre_id)
-            .single();
-          
-          if (genreData && genreData.genre_name) {
-            genres.push(genreData.genre_name);
-          }
-        }
-      }
-  
-      // Récupérer l'éditeur
-      let publisher: string | null = null;
+        
+      // Attendre les résultats des trois requêtes principales
+      const [bookResult, authorsResult, genresResult] = await Promise.all([
+        bookPromise,
+        authorsPromise,
+        genresPromise
+      ]);
+      
+      if (bookResult.error) throw bookResult.error;
+      if (authorsResult.error) throw authorsResult.error;
+      if (genresResult.error) throw genresResult.error;
+      
+      const bookData = bookResult.data;
+      
+      // Récupérer les infos additionnelles en parallèle
+      const promises = [];
+      
+      // Auteurs
+      const authorPromises = (authorsResult.data || []).map(authorEntry => 
+        supabase
+          .from('authors')
+          .select('author_name')
+          .eq('author_id', authorEntry.author_id)
+          .single()
+      );
+      promises.push(Promise.all(authorPromises));
+      
+      // Genres
+      const genrePromises = (genresResult.data || []).map(genreEntry => 
+        supabase
+          .from('genres')
+          .select('genre_name')
+          .eq('genre_id', genreEntry.genre_id)
+          .single()
+      );
+      promises.push(Promise.all(genrePromises));
+      
+      // Éditeur
+      let publisherPromise = Promise.resolve(null);
       if (bookData.publisher_id) {
-        const { data: publisherData } = await supabase
+        publisherPromise = supabase
           .from('publishers')
           .select('publisher_name')
           .eq('publisher_id', bookData.publisher_id)
           .single();
-        
-        if (publisherData) {
-          publisher = publisherData.publisher_name;
-        }
       }
+      promises.push(publisherPromise);
       
-      // Récupérer la langue
-      let language = null;
+      // Langue
+      let languagePromise = Promise.resolve(null);
       if (bookData.language_id) {
-        console.log('Language ID found:', bookData.language_id);
-        
-        const { data: languageData, error: languageError } = await supabase
+        languagePromise = supabase
           .from('languages')
           .select('language_name')
           .eq('language_id', bookData.language_id)
           .single();
-        
-        if (languageError) {
-          console.error('Erreur lors de la récupération de la langue:', languageError);
-        } else if (languageData) {
-          console.log('Language data found:', languageData);
-          language = languageData.language_name;
-        } else {
-          console.warn('No language data found with ID:', bookData.language_id);
-        }
-      } else {
-        console.warn('No language_id in book data');
       }
+      promises.push(languagePromise);
       
-      // Récupérer la série
-      let series: string | null = null;
+      // Série
+      let seriesPromise = Promise.resolve(null);
       if (bookData.series_id) {
-        const { data: seriesData } = await supabase
+        seriesPromise = supabase
           .from('series')
           .select('series_name')
           .eq('series_id', bookData.series_id)
           .single();
-        
-        if (seriesData) {
-          series = seriesData.series_name;
-        }
       }
+      promises.push(seriesPromise);
+      
+      // Attendre toutes les requêtes additionnelles
+      const [
+        authorResponses,
+        genreResponses,
+        publisherResponse,
+        languageResponse,
+        seriesResponse
+      ] = await Promise.all(promises);
+      
+      // Extraire les noms d'auteurs
+      const authorNames = authorResponses
+        .filter(res => !res.error && res.data)
+        .map(res => res.data.author_name);
+        
+      // Extraire les noms de genres
+      const genres = genreResponses
+        .filter(res => !res.error && res.data)
+        .map(res => res.data.genre_name);
+        
+      // Extraire le nom de l'éditeur
+      const publisher = publisherResponse && !publisherResponse.error 
+        ? publisherResponse.data?.publisher_name 
+        : null;
+        
+      // Extraire le nom de la langue
+      const language = languageResponse && !languageResponse.error 
+        ? languageResponse.data?.language_name 
+        : null;
+        
+      // Extraire le nom de la série
+      const series = seriesResponse && !seriesResponse.error 
+        ? seriesResponse.data?.series_name 
+        : null;
       
       // Créer l'objet livre complet
       const bookDetail: BookDetail = {
@@ -218,7 +216,6 @@ export default function BookDetail() {
         series_release_number: bookData.series_release_number
       };
       
-      console.log('Final book detail object:', bookDetail);
       setBook(bookDetail);
     } catch (error) {
       console.error('Erreur lors de la récupération du livre :', error);

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase/supabaseClient';
 import Link from 'next/link';
 import { FiTrendingUp, FiClock, FiStar, FiHeart } from 'react-icons/fi';
+import BookCard from '../components/books/BookCard';
 
 // Types simplifiés
 type Book = {
@@ -245,36 +246,24 @@ export default function Home() {
       ) : (
         <div className="space-y-8">
           {categories.map(category => (
-            <div key={category.id}>
-              <h2 className="text-xl font-bold mb-4">{category.name}</h2>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {category.books.map((book) => (
-                  <div key={book.book_id} className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                    <Link href={`/book/${book.book_id}`}>
-                      <div className="aspect-[2/3] bg-gray-200 relative">
-                        {book.thumbnail && (
-                          <img 
-                            src={book.thumbnail} 
-                            alt={book.title}
-                            className="object-cover w-full h-full"
-                          />
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <h3 className="font-medium text-sm line-clamp-1">{book.title}</h3>
-                        <p className="text-xs text-gray-600 line-clamp-1">
-                          {book.authorNames.length > 0 
-                            ? book.authorNames.join(', ') 
-                            : 'Auteur inconnu'}
-                        </p>
-                      </div>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+  <div key={category.id}>
+    <h2 className="text-xl font-bold mb-4">{category.name}</h2>
+    
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {category.books.map((book) => (
+        <BookCard 
+          key={book.book_id} 
+          book={{
+            id: book.book_id,
+            title: book.title,
+            authors: book.authorNames,
+            thumbnail: book.thumbnail
+          }}
+        />
+      ))}
+    </div>
+  </div>
+))}
           
           {categories.length === 0 && (
             <div className="text-center py-10">

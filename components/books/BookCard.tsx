@@ -5,7 +5,8 @@ import { useRouter } from 'next/router';
 import { FiPlus, FiCheck, FiBookmark, FiClock, FiX } from 'react-icons/fi';
 import ShelfSelector from '../shelves/ShelfSelector';
 import { useAuth } from '../../context/AuthContext';
-import { setReadingStatus } from '../../lib/reading/readingStatusUtils';
+import { getReadingStatus, setReadingStatus, readingStatusLabels, ReadingStatus } from '../../lib/reading/readingStatusUtils';
+
 
 type BookCardProps = {
   book: {
@@ -27,7 +28,8 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   const [loading, setLoading] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-
+  const [readingStatus, setReadingStatusState] = useState<ReadingStatus | null>(null);
+  
   // Gestion du survol (desktop)
   const handleMouseEnter = () => {
     setShowButtons(true);
@@ -108,6 +110,23 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   };
 
   useEffect(() => {
+    if (user && book.id) {
+      fetchReadingStatus();
+    }
+  }, [user, book.id]);
+
+  const fetchReadingStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const status = await getReadingStatus(user.id, book.id);
+      setReadingStatusState(status);
+    } catch (error) {
+      console.error('Erreur lors de la récupération du statut de lecture:', error);
+    }
+  };
+
+  useEffect(() => {
     return () => {
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
@@ -129,7 +148,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   }, []);
 
   // Fonctions pour gérer les statuts de lecture
-  const handleReadingStatus = async (status: 'to_read' | 'reading' | 'read' | 'abandoned') => {
+  const handleReadingStatus = async (status: ReadingStatus) => {
     if (!user) {
       alert('Veuillez vous connecter pour définir un statut de lecture');
       return;
@@ -143,7 +162,13 @@ export default function BookCard({ book, onImport }: BookCardProps) {
         bookId = await onImport(book.id);
       }
       
-      await setReadingStatus(user.id, bookId, status);
+      const result = await setReadingStatus(user.id, bookId, status);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Mettre à jour l'état local
+      setReadingStatusState(status);
       
     } catch (error) {
       console.error(`Erreur lors de la définition du statut ${status}:`, error);
@@ -188,6 +213,23 @@ export default function BookCard({ book, onImport }: BookCardProps) {
               alt={book.title}
               className="object-cover w-full h-full"
             />
+          )}
+
+{readingStatus && (
+            <div className={`absolute top-2 right-2 rounded-full px-2 py-1 text-xs font-medium ${
+              readingStatus === 'to_read' ? 'bg-blue-500 text-white' :
+              readingStatus === 'reading' ? 'bg-green-500 text-white' :
+              readingStatus === 'read' ? 'bg-purple-500 text-white' :
+              'bg-red-500 text-white'
+            }`}>
+              {readingStatusLabels[readingStatus]}
+            </div>
+          )}
+          
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+            </div>
           )}
           
           {loading && (
@@ -252,13 +294,13 @@ export default function BookCard({ book, onImport }: BookCardProps) {
           )}
         </div>
         <div className="p-2">
-          <h3 className="font-medium text-sm line-clamp-1 text-black">{book.title}</h3>
-          <p className="text-xs text-black line-clamp-1">
-            {book.authors.length > 0 
-              ? book.authors.join(', ') 
-              : 'Auteur inconnu'}
-          </p>
-        </div>
+  <h3 className="font-medium text-sm line-clamp-1 text-gray-800">{book.title}</h3>
+  <p className="text-xs text-gray-600 line-clamp-1">
+    {book.authors.length > 0 
+      ? book.authors.join(', ') 
+      : 'Auteur inconnu'}
+  </p>
+</div>
       </Link>
 
       {showShelfSelector && (

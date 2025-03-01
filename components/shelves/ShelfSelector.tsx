@@ -52,8 +52,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     setError(null);
     
     try {
-      // Utiliser l'API fetch au lieu de l'appel direct à Supabase
-      const response = await fetch('/api/shelves/get-user-shelves', {
+      const response = await fetch('../../pages/api/shelves/get-user-shelves', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -78,7 +77,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     if (!user || !bookId) return;
     
     try {
-      const response = await fetch(`/api/shelves/get-book-shelves?bookId=${bookId}`, {
+      const response = await fetch(`../../pages/api/shelves/get-book-shelves?bookId=${bookId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -106,7 +105,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     try {
       const isSelected = selectedShelves.includes(shelfId);
       
-      const response = await fetch('/api/shelves/toggle-book-shelf', {
+      const response = await fetch('../../pages/api/shelves/toggle-book-shelf', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -143,7 +142,7 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
     setError(null);
     
     try {
-      const response = await fetch('/api/shelves/create-shelf', {
+      const response = await fetch('../../pages/api/shelves/create-shelf', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

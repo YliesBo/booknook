@@ -24,7 +24,6 @@ export default async function handler(
       .from('shelves')
       .select('shelf_id, shelf_name, is_system')
       .eq('user_id', session.user.id)
-      .eq('is_system', false)
       .order('shelf_name');
 
     if (error) {
