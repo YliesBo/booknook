@@ -1,16 +1,10 @@
-// pages/api/search.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import { searchGoogleBooks, GoogleBookItem } from '../../lib/api/googleBooksApi';
-
-type SearchResult = {
-  source: 'database' | 'google_books';
-  id: string;
-  title: string;
-  authors: string[];
-  thumbnail: string | null;
-  publishedDate?: string;
-};
+import { 
+  SearchResult, 
+  calculateRelevanceScore 
+} from '../../lib/search/searchUtils';
 
 export default async function handler(
   req: NextApiRequest,
@@ -63,31 +57,42 @@ export default async function handler(
         }
       }
 
-      dbResults.push({
+      const result: SearchResult = {
         source: 'database',
         id: book.book_id,
         title: book.title,
         authors: authorNames,
         thumbnail: book.thumbnail,
         publishedDate: book.published_date
-      });
+      };
+
+      // Calculer le score de pertinence
+      result.relevanceScore = calculateRelevanceScore(result, query as string);
+      dbResults.push(result);
     }
 
     // Recherche via Google Books API
     const googleBooks = await searchGoogleBooks(query);
     
     // Transformer les résultats de Google Books au même format
-    const googleResults: SearchResult[] = googleBooks.map(book => ({
-      source: 'google_books',
-      id: book.id,
-      title: book.volumeInfo.title,
-      authors: book.volumeInfo.authors || [],
-      thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
-      publishedDate: book.volumeInfo.publishedDate
-    }));
+    const googleResults: SearchResult[] = googleBooks.map(book => {
+      const result: SearchResult = {
+        source: 'google_books',
+        id: book.id,
+        title: book.volumeInfo.title,
+        authors: book.volumeInfo.authors || [],
+        thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
+        publishedDate: book.volumeInfo.publishedDate
+      };
 
-    // Combiner les résultats
-    const results = [...dbResults, ...googleResults];
+      // Calculer le score de pertinence
+      result.relevanceScore = calculateRelevanceScore(result, query as string);
+      return result;
+    });
+
+    // Combiner et trier les résultats par score de pertinence
+    const results = [...dbResults, ...googleResults]
+      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
     return res.status(200).json({ results });
   } catch (error) {

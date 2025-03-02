@@ -70,11 +70,6 @@ export function calculateRelevanceScore(
     score += 15;
   }
   
-  // Préférence légère pour les résultats de la base de données locale
-  if (result.source === 'database') {
-    score += 10;
-  }
-  
   // Bonus pour les livres avec date de publication
   if (result.publishedDate) {
     score += 5;
@@ -88,31 +83,34 @@ export function calculateRelevanceScore(
  * et les regroupe ensemble dans les résultats
  */
 export function groupSeriesBooks(results: SearchResult[]): SearchResult[] {
+  // Vérification initiale
+  if (!results || results.length === 0) return results;
+
   // Identifier les groupes de livres potentiellement de la même série
   const seriesGroups: { [key: string]: SearchResult[] } = {};
   
   results.forEach(result => {
-    // Extraire un potentiel nom de série à partir du titre
+    // Sécuriser l'extraction du nom de série
     const seriesMatch = result.title.match(/^(.*?)\s*(?:[\(\[]?(#|tome|vol\.?|volume|part|livre)\.?\s*\d+|[:]\s+.*$)/i);
     
     if (seriesMatch && seriesMatch[1]) {
       const seriesName = seriesMatch[1].trim().toLowerCase();
       
-      // Ignorer les noms de série trop courts (probablement des faux positifs)
-      if (seriesName.length > 3) {
+      // Filtrage plus strict des noms de série
+      if (seriesName.length > 3 && 
+          !['le', 'la', 'les', 'un', 'une', 'des'].includes(seriesName)) {
         if (!seriesGroups[seriesName]) {
           seriesGroups[seriesName] = [];
         }
         seriesGroups[seriesName].push(result);
-      } else {
-        // Pas de série identifiée, laisser tel quel
       }
     }
   });
   
-  // Extraire les numéros de tome des titres quand c'est possible
+  // Extraire les numéros de tome des titres avec plus de précision
   const getVolumeNumber = (title: string): number => {
-    const volumeMatch = title.match(/(?:#|tome|vol\.?|volume|part|livre)\.?\s*(\d+)/i);
+    // Expression régulière plus robuste pour extraire le numéro
+    const volumeMatch = title.match(/(?:^|\W)(?:#|tome|vol\.?|volume|part|livre)\.?\s*(\d+)/i);
     if (volumeMatch && volumeMatch[1]) {
       return parseInt(volumeMatch[1], 10);
     }
@@ -137,19 +135,16 @@ export function groupSeriesBooks(results: SearchResult[]): SearchResult[] {
   
   // D'abord ajouter tous les résultats qui ne font pas partie d'une série
   results.forEach(result => {
-    // Vérifier si ce résultat fait partie d'une série identifiée
-    let isPartOfSeries = false;
+    const bookId = `${result.source}-${result.id}`;
     
-    for (const seriesName in seriesGroups) {
-      if (seriesGroups[seriesName].some(book => book.id === result.id && book.source === result.source)) {
-        isPartOfSeries = true;
-        break;
-      }
-    }
+    // Vérifier si ce résultat fait partie d'une série identifiée
+    const isPartOfSeries = Object.values(seriesGroups).some(seriesGroup => 
+      seriesGroup.some(book => book.id === result.id && book.source === result.source)
+    );
     
     if (!isPartOfSeries) {
       groupedResults.push(result);
-      processedIds.add(`${result.source}-${result.id}`);
+      processedIds.add(bookId);
     }
   });
   

@@ -1,20 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { FiSearch, FiPlus, FiFilter, FiChevronDown } from 'react-icons/fi';
 import BookCard from '../../components/books/BookCard';
-
-type SearchResult = {
-  source: 'database' | 'google_books';
-  id: string;
-  title: string;
-  authors: string[];
-  thumbnail: string | null;
-  publishedDate?: string;
-};
+import { 
+  SearchResult, 
+  calculateRelevanceScore, 
+  groupSeriesBooks 
+} from '../../lib/search/searchUtils';
 
 type SortOption = 'relevance' | 'title_asc' | 'title_desc' | 'date_asc' | 'date_desc';
-type FilterOption = 'all' | 'database' | 'google_books';
+type FilterOption = 'all' | 'database' | 'google_books' | 'series';
 
 export default function Search() {
   const router = useRouter();
@@ -91,6 +87,9 @@ export default function Search() {
   // Fonction pour trier les résultats
   const sortResults = (results: SearchResult[]): SearchResult[] => {
     switch (sortBy) {
+      case 'relevance':
+        // Utiliser le score de pertinence précalculé
+        return [...results].sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
       case 'title_asc':
         return [...results].sort((a, b) => a.title.localeCompare(b.title));
       case 'title_desc':
@@ -108,14 +107,24 @@ export default function Search() {
           return b.publishedDate.localeCompare(a.publishedDate);
         });
       default:
-        return results; // Par défaut, l'ordre de pertinence
+        return results;
     }
   };
 
   // Fonction pour filtrer les résultats
   const filterResults = (results: SearchResult[]): SearchResult[] => {
-    if (filterBy === 'all') return results;
-    return results.filter(result => result.source === filterBy);
+    switch (filterBy) {
+      case 'all':
+        return results;
+      case 'database':
+        return results.filter(result => result.source === 'database');
+      case 'google_books':
+        return results.filter(result => result.source === 'google_books');
+      case 'series':
+        return groupSeriesBooks(results);
+      default:
+        return results;
+    }
   };
 
   // Mettre à jour la logique d'affichage des résultats
@@ -147,6 +156,11 @@ export default function Search() {
           <div className="flex justify-between items-center mb-4">
             <div className="text-gray-600">
               Résultats pour <span className="font-semibold">"{q}"</span>
+              {results.length > 0 && (
+                <span className="ml-2 text-sm text-gray-500">
+                  {results.length} résultat{results.length !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -189,6 +203,7 @@ export default function Search() {
                     <option value="all">Toutes les sources</option>
                     <option value="database">Ma bibliothèque</option>
                     <option value="google_books">Google Books</option>
+                    <option value="series">Séries de livres</option>
                   </select>
                 </div>
               </div>
