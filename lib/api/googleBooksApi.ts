@@ -5,7 +5,6 @@ export type GoogleBookItem = {
   id: string;
   volumeInfo: {
     title: string;
-    subtitle?: string;
     authors?: string[];
     publisher?: string;
     publishedDate?: string;
@@ -18,8 +17,6 @@ export type GoogleBookItem = {
       smallThumbnail?: string;
     };
     language?: string;
-    printType?: string;  // 'BOOK' ou 'MAGAZINE'
-    maturityRating?: string;
   };
 };
 
@@ -30,27 +27,16 @@ export type GoogleBooksResponse = {
 
 export async function searchGoogleBooks(query: string, maxResults: number = 20): Promise<GoogleBookItem[]> {
   try {
-    // Ajout de printType=books pour récupérer uniquement les livres (pas les magazines)
-    const url = `${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(query)}&maxResults=${maxResults}&printType=books`;
-    
-    console.log(`Fetching Google Books API: ${url}`);
-    
-    const response = await fetch(url);
+    const response = await fetch(
+      `${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(query)}&maxResults=${maxResults}`
+    );
     
     if (!response.ok) {
       throw new Error(`Google Books API responded with status: ${response.status}`);
     }
     
     const data: GoogleBooksResponse = await response.json();
-    
-    // Filtrer les résultats sans titre ou avec des titres vides
-    const validResults = (data.items || []).filter(item => 
-      item.volumeInfo && 
-      item.volumeInfo.title && 
-      item.volumeInfo.title.trim() !== ''
-    );
-    
-    return validResults;
+    return data.items || [];
   } catch (error) {
     console.error('Error fetching from Google Books API:', error);
     return [];

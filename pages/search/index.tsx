@@ -1,8 +1,7 @@
-// pages/search/index.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { FiSearch, FiFilter, FiChevronDown } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiFilter, FiChevronDown } from 'react-icons/fi';
 import BookCard from '../../components/books/BookCard';
 
 type SearchResult = {
@@ -12,14 +11,10 @@ type SearchResult = {
   authors: string[];
   thumbnail: string | null;
   publishedDate?: string;
-  seriesInfo?: {
-    series: string;
-    volume: number | null;
-  } | null;
-  relevanceScore?: number;
 };
 
-type FilterOption = 'all' | 'database' | 'google_books' | 'with_cover';
+type SortOption = 'relevance' | 'title_asc' | 'title_desc' | 'date_asc' | 'date_desc';
+type FilterOption = 'all' | 'database' | 'google_books';
 
 export default function Search() {
   const router = useRouter();
@@ -28,6 +23,7 @@ export default function Search() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<Record<string, boolean>>({});
+  const [sortBy, setSortBy] = useState<SortOption>('relevance');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -92,82 +88,55 @@ export default function Search() {
     }
   };
 
-  // Filtrer les résultats selon les critères sélectionnés
-  const filterResults = useCallback((results: SearchResult[]): SearchResult[] => {
-    if (filterBy === 'all') {
-      return results;
+  // Fonction pour trier les résultats
+  const sortResults = (results: SearchResult[]): SearchResult[] => {
+    switch (sortBy) {
+      case 'title_asc':
+        return [...results].sort((a, b) => a.title.localeCompare(b.title));
+      case 'title_desc':
+        return [...results].sort((a, b) => b.title.localeCompare(a.title));
+      case 'date_asc':
+        return [...results].sort((a, b) => {
+          if (!a.publishedDate) return 1;
+          if (!b.publishedDate) return -1;
+          return a.publishedDate.localeCompare(b.publishedDate);
+        });
+      case 'date_desc':
+        return [...results].sort((a, b) => {
+          if (!a.publishedDate) return 1;
+          if (!b.publishedDate) return -1;
+          return b.publishedDate.localeCompare(a.publishedDate);
+        });
+      default:
+        return results; // Par défaut, l'ordre de pertinence
     }
-    
-    if (filterBy === 'with_cover') {
-      return results.filter(result => result.thumbnail !== null);
-    }
-    
-    return results.filter(result => result.source === filterBy);
-  }, [filterBy]);
+  };
 
-  // Afficher les résultats filtrés
+  // Fonction pour filtrer les résultats
+  const filterResults = (results: SearchResult[]): SearchResult[] => {
+    if (filterBy === 'all') return results;
+    return results.filter(result => result.source === filterBy);
+  };
+
+  // Mettre à jour la logique d'affichage des résultats
   const displayResults = useCallback(() => {
-    return filterResults(results);
-  }, [results, filterResults]);
+    const filtered = filterResults(results);
+    const sorted = sortResults(filtered);
+    return sorted;
+  }, [results, filterBy, sortBy]);
 
   return (
     <div className="w-full">
-      {/* Formulaire de recherche */}
-      <form onSubmit={handleSubmit} className="mb-6">
-        <div className="flex items-center">
-          <div className="relative flex-grow">
-            <input
-              type="text"
-              placeholder="Rechercher des livres, des auteurs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-2 pl-10 pr-4 text-gray-700 bg-gray-100 rounded-lg focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="text-gray-400" />
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            Rechercher
-          </button>
-        </div>
-      </form>
-
       {/* Si aucune recherche n'a été faite, nous affichons les suggestions */}
       {!q && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-6 rounded-lg text-white">
-            <h3 className="font-bold text-xl mb-3">Rechercher par genre</h3>
-            <p className="text-sm mb-4">Explorez des livres par catégorie</p>
-            <div className="flex flex-wrap gap-2">
-              {['Fantasy', 'Science Fiction', 'Mystery', 'Romance', 'Biography'].map(genre => (
-                <Link 
-                  key={genre}
-                  href={`/search?q=${encodeURIComponent(genre)}`}
-                  className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm hover:bg-opacity-30 transition-colors"
-                >
-                  {genre}
-                </Link>
-              ))}
-            </div>
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-lg text-white">
+            <h3 className="font-bold mb-2">Rechercher par genre</h3>
+            <p className="text-sm">Explorez des livres par catégorie</p>
           </div>
-          <div className="bg-gradient-to-r from-green-500 to-teal-500 p-6 rounded-lg text-white">
-            <h3 className="font-bold text-xl mb-3">Auteurs populaires</h3>
-            <p className="text-sm mb-4">Découvrez des livres d'auteurs renommés</p>
-            <div className="flex flex-wrap gap-2">
-              {['J.K. Rowling', 'Stephen King', 'George R.R. Martin', 'Agatha Christie', 'Haruki Murakami'].map(author => (
-                <Link 
-                  key={author}
-                  href={`/search?q=${encodeURIComponent(author)}`}
-                  className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm hover:bg-opacity-30 transition-colors"
-                >
-                  {author}
-                </Link>
-              ))}
-            </div>
+          <div className="bg-gradient-to-r from-green-500 to-teal-500 p-4 rounded-lg text-white">
+            <h3 className="font-bold mb-2">Rechercher par ambiance</h3>
+            <p className="text-sm">Trouvez des livres selon votre humeur</p>
           </div>
         </div>
       )}
@@ -177,13 +146,7 @@ export default function Search() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <div className="text-gray-600">
-              {displayResults().length > 0 ? (
-                <span>
-                  {displayResults().length} résultats pour <span className="font-semibold">"{q}"</span>
-                </span>
-              ) : (
-                <span>Recherche: <span className="font-semibold">"{q}"</span></span>
-              )}
+              Résultats pour <span className="font-semibold">"{q}"</span>
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -197,51 +160,36 @@ export default function Search() {
           
           {showFilters && (
             <div className="bg-gray-50 p-4 rounded-lg mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Afficher
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setFilterBy('all')}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      filterBy === 'all' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                    }`}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Trier par
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="w-full p-2 border border-gray-300 rounded-md"
                   >
-                    Tous les résultats
-                  </button>
-                  <button
-                    onClick={() => setFilterBy('database')}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      filterBy === 'database' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                    }`}
+                    <option value="relevance">Pertinence</option>
+                    <option value="title_asc">Titre (A-Z)</option>
+                    <option value="title_desc">Titre (Z-A)</option>
+                    <option value="date_asc">Date (ancien → récent)</option>
+                    <option value="date_desc">Date (récent → ancien)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Source
+                  </label>
+                  <select
+                    value={filterBy}
+                    onChange={(e) => setFilterBy(e.target.value as FilterOption)}
+                    className="w-full p-2 border border-gray-300 rounded-md"
                   >
-                    Ma bibliothèque
-                  </button>
-                  <button
-                    onClick={() => setFilterBy('google_books')}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      filterBy === 'google_books' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                    }`}
-                  >
-                    Google Books
-                  </button>
-                  <button
-                    onClick={() => setFilterBy('with_cover')}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      filterBy === 'with_cover' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                    }`}
-                  >
-                    Avec couverture
-                  </button>
+                    <option value="all">Toutes les sources</option>
+                    <option value="database">Ma bibliothèque</option>
+                    <option value="google_books">Google Books</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -268,29 +216,10 @@ export default function Search() {
                   />
                 ))
               ) : (
-                <div className="col-span-full text-center text-gray-500 my-12 bg-white p-8 rounded-lg shadow-sm">
-                  <p className="mb-4">Aucun livre trouvé pour "{q}".</p>
-                  <p>Essayez de rechercher avec des termes différents ou moins spécifiques.</p>
-                </div>
+                <p className="col-span-full text-center text-gray-500 my-12">
+                  Aucun livre trouvé pour "{q}".
+                </p>
               )}
-            </div>
-          )}
-          
-          {/* Suggestions liées à la recherche actuelle */}
-          {!loading && displayResults().length > 0 && (
-            <div className="mt-12 bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-lg font-semibold mb-4">Vous pourriez aussi aimer</h2>
-              <div className="flex flex-wrap gap-2">
-                {['Fantasy', 'Science Fiction', 'Manga', 'Comics', 'Novel'].map(genre => (
-                  <Link 
-                    key={genre}
-                    href={`/search?q=${encodeURIComponent(`${q} ${genre}`)}`}
-                    className="bg-white px-3 py-1 rounded-full text-sm border border-gray-200 hover:bg-gray-100 transition-colors"
-                  >
-                    {q} + {genre}
-                  </Link>
-                ))}
-              </div>
             </div>
           )}
         </div>
