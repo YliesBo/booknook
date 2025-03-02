@@ -13,9 +13,15 @@ type Shelf = {
 type ShelfSelectorProps = {
   bookId: string;
   onClose?: () => void;
+  source?: 'database' | 'google_books';
+  onImport?: (id: string) => Promise<string>;
 };
 
-export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
+export default function ShelfSelector({ bookId, 
+  onClose,
+  source,
+  onImport
+}: ShelfSelectorProps) {
   const { user, session } = useAuth();
   const [shelves, setShelves] = useState<Shelf[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,22 +113,35 @@ export default function ShelfSelector({ bookId, onClose }: ShelfSelectorProps) {
           .eq('user_id', user.id)
           .eq('book_id', bookId)
           .eq('shelf_id', shelfId);
-
+  
         if (error) throw error;
         
         // Update local state
         setSelectedShelves(selectedShelves.filter(id => id !== shelfId));
       } else {
+        // Si c'est un livre Google Books, importer d'abord
+        let finalBookId = bookId;
+        if (source === 'google_books' && onImport) {
+          try {
+            finalBookId = await onImport(bookId);
+          } catch (importError) {
+            console.error('Erreur lors de l\'importation du livre:', importError);
+            setError('Erreur lors de l\'importation du livre. Veuillez réessayer.');
+            setAddingToShelf(false);
+            return;
+          }
+        }
+        
         // Add book to shelf
         const { error } = await supabase
           .from('bookshelves')
           .insert({
             user_id: user.id,
-            book_id: bookId,
+            book_id: finalBookId,
             shelf_id: shelfId,
             date_added: new Date().toISOString()
           });
-
+  
         if (error) throw error;
         
         // Update local state

@@ -252,14 +252,15 @@ export default function Home() {
     <div className="book-grid">
   {category.books.map((book) => (
     <BookCard 
-      key={book.book_id} 
-      book={{
-        id: book.book_id,
-        title: book.title,
-        authors: book.authorNames,
-        thumbnail: book.thumbnail
-      }}
-    />
+    key={book.book_id} 
+    book={{
+      id: book.book_id,
+      title: book.title,
+      authors: book.authorNames,
+      thumbnail: book.thumbnail,
+      source: 'database' // Ajoutez cette ligne
+    }}
+  />
   ))}
 </div>
   </div>

@@ -214,7 +214,7 @@ export default function BookCard({ book, onImport }: BookCardProps) {
   return (
     <div 
       ref={cardRef}
-      className="flex flex-col h-full"
+      className="flex flex-col h-full relative"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -322,13 +322,15 @@ export default function BookCard({ book, onImport }: BookCardProps) {
       </div>
 
       {showShelfSelector && (
-        <div className="absolute z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-          <ShelfSelector 
-            bookId={book.id} 
-            onClose={() => setShowShelfSelector(false)}
-          />
-        </div>
-      )}
+  <div className="absolute z-20 top-1/3 left-1/2 transform -translate-x-1/2">
+    <ShelfSelector 
+      bookId={book.id} 
+      onClose={() => setShowShelfSelector(false)}
+      source={book.source}
+      onImport={onImport}
+    />
+  </div>
+)}
     </div>
   );
 }
