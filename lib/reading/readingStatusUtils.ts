@@ -21,19 +21,24 @@ export const readingStatusLabels: Record<ReadingStatus, string> = {
 export async function getReadingStatus(userId: string, bookId: string): Promise<ReadingStatus | null> {
   if (!userId || !bookId) return null;
   
-  const { data, error } = await supabase
-    .from('reading_status')
-    .select('status')
-    .eq('user_id', userId)
-    .eq('book_id', bookId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('reading_status')
+      .select('status')
+      .eq('user_id', userId)
+      .eq('book_id', bookId)
+      .maybeSingle(); // Utiliser maybeSingle au lieu de single
+      
+    if (error) {
+      console.error('Erreur lors de la récupération du statut de lecture:', error);
+      return null;
+    }
     
-  if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-    console.error('Erreur lors de la récupération du statut de lecture:', error);
+    return data?.status as ReadingStatus | null;
+  } catch (error) {
+    console.error('Exception lors de la récupération du statut de lecture:', error);
     return null;
   }
-  
-  return data?.status as ReadingStatus | null;
 }
 
 // Définir le statut de lecture d'un livre
@@ -53,38 +58,20 @@ export async function setReadingStatus(userId: string, bookId: string, status: R
       return { success: true };
     }
     
-    // Vérifier si un statut existe déjà pour ce livre (quelle que soit la valeur)
-    const { data: existingStatus } = await supabase
+    // Utiliser upsert pour créer ou mettre à jour
+    const { error } = await supabase
       .from('reading_status')
-      .select('status_id')
-      .eq('user_id', userId)
-      .eq('book_id', bookId);
-    
-    if (existingStatus && existingStatus.length > 0) {
-      // Mettre à jour le statut existant au lieu d'en créer un nouveau
-      const { error } = await supabase
-        .from('reading_status')
-        .update({ 
-          status,
-          date_updated: new Date().toISOString() 
-        })
-        .eq('status_id', existingStatus[0].status_id);
-        
-      if (error) throw error;
-    } else {
-      // Créer un nouveau statut
-      const { error } = await supabase
-        .from('reading_status')
-        .insert({
-          user_id: userId,
-          book_id: bookId,
-          status,
-          date_added: new Date().toISOString()
-        });
-        
-      if (error) throw error;
-    }
-    
+      .upsert({
+        user_id: userId,
+        book_id: bookId,
+        status,
+        date_added: new Date().toISOString(),
+        date_updated: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,book_id'
+      });
+      
+    if (error) throw error;
     return { success: true };
   } catch (error: any) {
     console.error('Erreur lors de la mise à jour du statut de lecture:', error);

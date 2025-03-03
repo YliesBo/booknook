@@ -28,20 +28,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Cet useEffect ne s'exécute que côté client (pas pendant le SSR)
   useEffect(() => {
     if (!isClient) return;
-
-    // Fonction pour récupérer la session
+  
     const getSession = async () => {
       try {
         setIsLoading(true);
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Erreur lors de la récupération de la session:', error);
           setUser(null);
           setSession(null);
-        } else if (session) {
-          setSession(session);
-          setUser(session.user);
+        } else if (data?.session) {
+          setSession(data.session);
+          setUser(data.session.user);
         } else {
           setUser(null);
           setSession(null);
@@ -54,13 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     };
-
+  
     getSession();
     
-    // Écouter les changements d'authentification
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log(`Auth event: ${event}`);
+    // Simplifier le code de l'écouteur d'événements
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -68,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     
     return () => {
-      subscription.unsubscribe();
+      authListener?.subscription.unsubscribe();
     };
   }, [isClient]);
 

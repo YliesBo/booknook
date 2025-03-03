@@ -21,8 +21,14 @@ export function calculateRelevanceScore(
 ): number {
   let score = 0;
   const query = searchQuery.toLowerCase().trim();
-  const title = result.title.toLowerCase();
-  const authorString = result.authors.join(' ').toLowerCase();
+  
+  // Vérifier que title existe avant d'appeler toLowerCase()
+  const title = result.title ? result.title.toLowerCase() : '';
+  
+  // Vérifier que authors existe et est un tableau avant de l'utiliser
+  const authorString = Array.isArray(result.authors) 
+    ? result.authors.join(' ').toLowerCase() 
+    : '';
   
   // Correspondance exacte du titre (priorité la plus élevée)
   if (title === query) {
@@ -39,14 +45,18 @@ export function calculateRelevanceScore(
   
   // Vérifier les correspondances de mots individuels
   const queryWords = query.split(/\s+/).filter(word => word.length > 1);
-  const titleWords = title.split(/\s+/).filter(word => word.length > 1);
+  
+  // S'assurer que title n'est pas vide avant de le diviser
+  const titleWords = title 
+    ? title.split(/\s+/).filter(word => word.length > 1) 
+    : [];
   
   // Nombre de mots de la requête trouvés dans le titre
   const matchingWords = queryWords.filter(word => 
     titleWords.some(titleWord => titleWord.includes(word))
   );
   
-  if (matchingWords.length > 0) {
+  if (matchingWords.length > 0 && queryWords.length > 0) {
     // Bonus proportionnel au pourcentage de mots correspondants
     score += 30 * (matchingWords.length / queryWords.length);
   }
@@ -54,7 +64,7 @@ export function calculateRelevanceScore(
   // Bonus pour les correspondances d'auteurs
   if (authorString.includes(query)) {
     score += 40;
-  } else {
+  } else if (authorString && queryWords.length > 0) {
     // Vérifier les mots individuels dans les noms d'auteurs
     const authorMatches = queryWords.filter(word => 
       authorString.includes(word)

@@ -5,35 +5,39 @@ import { SearchResult } from './searchUtils';
  * Vérifie si un livre existe déjà dans Google Books IDs
  */
 export function isGoogleBookIdDuplicate(googleBookId: string | null | undefined, existingIds: Set<string>): boolean {
-    return googleBookId !== null && googleBookId !== undefined && existingIds.has(googleBookId);
-  }
-  
-  export function filterGoogleBooksByIds(
-    googleResults: SearchResult[],
-    googleBookIds: Set<string>
-  ): SearchResult[] {
-    return googleResults.filter(result => {
-      // Gestion plus sûre des valeurs null/undefined
-      return !(result.googleBookId && googleBookIds.has(result.googleBookId));
-    });
-  }
+  return googleBookId !== null && googleBookId !== undefined && existingIds.has(googleBookId);
+}
+
+export function filterGoogleBooksByIds(
+  googleResults: SearchResult[],
+  googleBookIds: Set<string>
+): SearchResult[] {
+  return googleResults.filter(result => {
+    // Vérifier la propriété id au lieu de googleBookId
+    return !(result.id && googleBookIds.has(result.id));
+  });
+}
 
 /**
  * Marquage des résultats similaires pour permettre leur distinction dans l'UI
- * Ceci n'élimine pas les doublons mais les identifie pour permettre un traitement spécial
  */
 export function markSimilarBooks(results: SearchResult[]): SearchResult[] {
-    // Vérification que results est bien un tableau
-    if (!Array.isArray(results)) {
-      console.error('markSimilarBooks called with non-array:', results);
-      return [];
-    }
-    
-    const similarityGroups: Map<string, SearchResult[]> = new Map();
-    
+  // Vérification que results est bien un tableau
+  if (!Array.isArray(results)) {
+    console.error('markSimilarBooks called with non-array:', results);
+    return [];
+  }
+  
+  const similarityGroups: Map<string, SearchResult[]> = new Map();
   
   // Regrouper les livres par titre et auteurs normalisés
   results.forEach(result => {
+    // Gestion plus sûre des données
+    if (!result.title || !Array.isArray(result.authors)) {
+      console.warn('Skipping invalid result:', result);
+      return;
+    }
+    
     // Créer une clé de normalisation pour regrouper les livres similaires
     const normalizedTitle = result.title.toLowerCase().trim();
     const normalizedAuthors = result.authors
@@ -50,13 +54,6 @@ export function markSimilarBooks(results: SearchResult[]): SearchResult[] {
     similarityGroups.get(similarityKey)!.push(result);
   });
   
-// Gestion plus sûre des données potentiellement manquantes
-  results.forEach(result => {
-    if (!result.title || !Array.isArray(result.authors)) {
-      console.warn('Skipping invalid result:', result);
-      return;
-    }
-
   // Traiter chaque groupe de livres similaires
   const processedResults: SearchResult[] = [];
   
@@ -78,15 +75,8 @@ export function markSimilarBooks(results: SearchResult[]): SearchResult[] {
       return (b.relevanceScore || 0) - (a.relevanceScore || 0);
     });
     
-    // Marquer les livres comme faisant partie d'un groupe de similaires
-    sortedGroup.forEach((book, index) => {
-      processedResults.push({
-        ...book,
-        similarityGroup: sortedGroup.length > 1 ? group[0].title : undefined,
-        similarityIndex: index,
-        totalSimilar: sortedGroup.length
-      });
-    });
+    // Renvoyer les résultats sans ajouter de propriétés non définies
+    processedResults.push(...sortedGroup);
   });
   
   // Retrier les résultats finaux par score de relevance

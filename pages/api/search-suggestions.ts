@@ -99,7 +99,7 @@ export default async function handler(
       const data = await response.json();
       
       if (data.items && Array.isArray(data.items)) {
-        data.items.forEach(item => {
+        data.items.forEach((item: any) => {
           // Vérifier si ce livre de Google Books existe déjà dans notre DB
           if (existingGoogleBookIds.has(item.id)) {
             return; // Ignorer ce livre

@@ -149,6 +149,25 @@ export default function BookCard({ book, onImport }: BookCardProps) {
     };
   }, []);
 
+// Ajoutez cette vérification avant d'appeler handleReadingStatus
+const handleReadingStatusClick = async (status: ReadingStatus, e: React.MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (!user) {
+    alert('Veuillez vous connecter pour définir un statut de lecture');
+    return;
+  }
+  
+  // Vérifier que book.id est défini
+  if (!book || !book.id) {
+    console.error('ID du livre manquant');
+    return;
+  }
+  
+  handleReadingStatus(status);
+};
+
   // Fonctions pour gérer les statuts de lecture
   const handleReadingStatus = async (status: ReadingStatus) => {
     if (!user) {

@@ -1,4 +1,4 @@
-// Dans pages/api/search.ts - Modification pour filtrer les doublons
+// pages/api/search.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import { searchGoogleBooks, GoogleBookItem } from '../../lib/api/googleBooksApi';
@@ -42,41 +42,45 @@ export default async function handler(
     const dbResults: SearchResult[] = [];
     const existingGoogleBookIds = new Set<string>(); // Ensemble pour suivre les IDs Google Books déjà dans la DB
     
-    for (const book of dbBooks || []) {
-      const { data: authorsData } = await supabase
-        .from('book_authors')
-        .select('author_id')
-        .eq('book_id', book.book_id);
+    if (dbBooks && Array.isArray(dbBooks)) {
+      for (const book of dbBooks) {
+        const { data: authorsData } = await supabase
+          .from('book_authors')
+          .select('author_id')
+          .eq('book_id', book.book_id);
 
-      const authorNames: string[] = [];
-      for (const authorEntry of authorsData || []) {
-        const { data: authorData } = await supabase
-          .from('authors')
-          .select('author_name')
-          .eq('author_id', authorEntry.author_id)
-          .single();
+        const authorNames: string[] = [];
+        if (authorsData && Array.isArray(authorsData)) {
+          for (const authorEntry of authorsData) {
+            const { data: authorData } = await supabase
+              .from('authors')
+              .select('author_name')
+              .eq('author_id', authorEntry.author_id)
+              .single();
 
-        if (authorData?.author_name) {
-          authorNames.push(authorData.author_name);
+            if (authorData?.author_name) {
+              authorNames.push(authorData.author_name);
+            }
+          }
         }
-      }
 
-      const result: SearchResult = {
-        source: 'database',
-        id: book.book_id,
-        title: book.title,
-        authors: authorNames,
-        thumbnail: book.thumbnail,
-        publishedDate: book.published_date
-      };
+        const result: SearchResult = {
+          source: 'database',
+          id: book.book_id,
+          title: book.title || 'Sans titre', // Valeur par défaut si title est null
+          authors: authorNames,
+          thumbnail: book.thumbnail,
+          publishedDate: book.published_date
+        };
 
-      // Calculer le score de pertinence
-      result.relevanceScore = calculateRelevanceScore(result, query as string);
-      dbResults.push(result);
-      
-      // Si le livre a un ID Google Books, l'ajouter à notre ensemble
-      if (book.google_book_id) {
-        existingGoogleBookIds.add(book.google_book_id);
+        // Calculer le score de pertinence
+        result.relevanceScore = calculateRelevanceScore(result, query);
+        dbResults.push(result);
+        
+        // Si le livre a un ID Google Books, l'ajouter à notre ensemble
+        if (book.google_book_id) {
+          existingGoogleBookIds.add(book.google_book_id);
+        }
       }
     }
 
@@ -84,25 +88,34 @@ export default async function handler(
     const googleBooks = await searchGoogleBooks(query);
     
     // Transformer les résultats de Google Books en filtrant ceux déjà dans la base de données
-    const googleResults: SearchResult[] = googleBooks
-      .filter(book => !existingGoogleBookIds.has(book.id)) // Filtrer les livres déjà présents
-      .map(book => {
-        const result: SearchResult = {
-          source: 'google_books',
-          id: book.id,
-          title: book.volumeInfo.title,
-          authors: book.volumeInfo.authors || [],
-          thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
-          publishedDate: book.volumeInfo.publishedDate
-        };
+    const googleResults: SearchResult[] = [];
+    
+    if (googleBooks && Array.isArray(googleBooks)) {
+      googleBooks
+        .filter(book => !book.id || !existingGoogleBookIds.has(book.id))
+        .forEach(book => {
+          if (!book || !book.volumeInfo || !book.volumeInfo.title) {
+            return; // Ignorer les livres sans titre
+          }
+          
+          const result: SearchResult = {
+            source: 'google_books',
+            id: book.id || `google-book-${Date.now()}-${Math.random()}`,
+            title: book.volumeInfo.title,
+            authors: book.volumeInfo.authors || [],
+            thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
+            publishedDate: book.volumeInfo.publishedDate
+          };
 
-        // Calculer le score de pertinence
-        result.relevanceScore = calculateRelevanceScore(result, query as string);
-        return result;
-      });
+          // Calculer le score de pertinence
+          result.relevanceScore = calculateRelevanceScore(result, query);
+          googleResults.push(result);
+        });
+    }
 
     // Combiner et trier les résultats par score de pertinence
-    const results = [...dbResults, ...googleResults]
+    const combinedResults = [...dbResults, ...googleResults];
+    const results = combinedResults
       .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
     return res.status(200).json({ results });
