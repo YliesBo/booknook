@@ -16,6 +16,7 @@ type BookCardProps = {
     authors: string[];
     thumbnail: string | null;
     source?: 'database' | 'google_books';
+    languageCode?: string; // Ajouter cette ligne
   };
   onImport?: (id: string) => Promise<string>;
 };

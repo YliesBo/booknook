@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase/supabaseClient';
 import Link from 'next/link';
 import { updateUsername, updateBio, getUserProfile } from '../../lib/users/userUtils';
 import { readingStatusLabels, getBooksWithStatus } from '../../lib/reading/readingStatusUtils';
-import { FiEdit2, FiBookOpen, FiBook, FiClock, FiBookmark, FiPauseCircle, FiCheckCircle, FiX } from 'react-icons/fi';
+import { FiEdit2, FiBookOpen, FiBook, FiClock, FiBookmark, FiPauseCircle, FiCheckCircle, FiX, FiGlobe } from 'react-icons/fi';
 
 
 type UserStats = {
@@ -43,7 +43,7 @@ type RecentReviewActivity = {
 type RecentActivity = RecentShelfActivity | RecentReviewActivity;
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, preferredLanguage, updatePreferredLanguage } = useAuth();
   useProtectedRoute();
   
   const [stats, setStats] = useState<UserStats>({
@@ -60,15 +60,22 @@ export default function Profile() {
   const [username, setUsername] = useState('');
   const [editingUsername, setEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState('');
+  const [editingLanguage, setEditingLanguage] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('');
 
   useEffect(() => {
     if (user) {
       fetchUserProfile();
       fetchUserStats();
       fetchRecentActivity();
-      fetchReadingStatuses(); // Nouvelle fonction
+      fetchReadingStatuses();
     }
   }, [user]);
+
+  useEffect(() => {
+    // Initialiser la langue sélectionnée quand preferredLanguage change
+    setSelectedLanguage(preferredLanguage);
+  }, [preferredLanguage]);
 
   const fetchReadingStatuses = async () => {
     if (!user) return;
@@ -337,6 +344,21 @@ export default function Profile() {
     }
   };
 
+  const handleUpdateLanguage = async () => {
+    try {
+      const { error } = await updatePreferredLanguage(selectedLanguage);
+      
+      if (error) {
+        alert(error.message || 'Erreur lors de la mise à jour de la langue préférée');
+        return;
+      }
+      
+      setEditingLanguage(false);
+    } catch (error: any) {
+      console.error('Erreur lors de la mise à jour de la langue préférée:', error);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', {
@@ -369,11 +391,11 @@ export default function Profile() {
                   placeholder="Votre nom d'utilisateur"
                 />
                 <button
-  onClick={handleUpdateUsername} // Ne passe pas d'argument ici
-  className="bg-blue-500 text-white px-3 py-1 rounded-md"
->
-  Enregistrer
-</button>
+                  onClick={handleUpdateUsername}
+                  className="bg-blue-500 text-white px-3 py-1 rounded-md"
+                >
+                  Enregistrer
+                </button>
               </div>
             ) : (
               <div className="flex items-center">
@@ -387,6 +409,55 @@ export default function Profile() {
               </div>
             )}
             <p className="text-gray-600">{user?.email}</p>
+          </div>
+        </div>
+        
+        {/* Nouvelle section pour la préférence de langue */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <div className="flex items-center">
+              <FiGlobe className="text-gray-500 mr-2" />
+              <span className="text-gray-600">Langue préférée</span>
+            </div>
+            
+            {editingLanguage ? (
+              <div className="flex items-center mt-2">
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  className="p-2 border rounded-md mr-2"
+                >
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                  <option value="de">Deutsch</option>
+                  <option value="it">Italiano</option>
+                </select>
+                <button
+                  onClick={handleUpdateLanguage}
+                  className="bg-blue-500 text-white px-3 py-1 rounded-md"
+                >
+                  Enregistrer
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <span className="font-medium">
+                  {preferredLanguage === 'fr' ? 'Français' :
+                   preferredLanguage === 'en' ? 'English' :
+                   preferredLanguage === 'es' ? 'Español' :
+                   preferredLanguage === 'de' ? 'Deutsch' :
+                   preferredLanguage === 'it' ? 'Italiano' :
+                   preferredLanguage}
+                </span>
+                <button
+                  onClick={() => setEditingLanguage(true)}
+                  className="ml-2 text-gray-500 hover:text-gray-700"
+                >
+                  <FiEdit2 size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
         
@@ -427,82 +498,82 @@ export default function Profile() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       <div>
-  <h2 className="text-xl font-bold mb-4">Mes étagères</h2>
-  <div className="bg-white rounded-lg shadow-md overflow-hidden">
-    {/* Statuts de lecture (affichés comme des étagères) */}
-    <Link href="/reading-status/to-read">
-      <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
-        <div className="flex items-center">
-          <FiBook className="text-blue-500 mr-3" />
-          <span>À lire</span>
-        </div>
-        <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-          {stats.toReadCount}
-        </span>
-      </div>
-    </Link>
-    
-    <Link href="/reading-status/reading">
-      <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
-        <div className="flex items-center">
-          <FiClock className="text-green-500 mr-3" />
-          <span>En cours</span>
-        </div>
-        <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-          {stats.readingCount}
-        </span>
-      </div>
-    </Link>
-    
-    <Link href="/reading-status/read">
-      <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
-        <div className="flex items-center">
-          <FiCheckCircle className="text-purple-500 mr-3" />
-          <span>Lu</span>
-        </div>
-        <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-          {stats.readCount}
-        </span>
-      </div>
-    </Link>
-    
-    <Link href="/reading-status/abandoned">
-      <div className="p-4 flex items-center justify-between hover:bg-gray-50">
-        <div className="flex items-center">
-          <FiX className="text-red-500 mr-3" />
-          <span>Abandonné</span>
-        </div>
-        <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-          {stats.abandonedCount}
-        </span>
-      </div>
-    </Link>
-  </div>
-  
-  {/* Étagères personnalisées */}
-  <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
-  <div className="bg-white rounded-lg shadow-md overflow-hidden">
-    {customShelves.length > 0 ? (
-      customShelves.map((shelf) => (
-        <Link key={shelf.shelf_id} href={`/shelves/${shelf.shelf_id}`}>
-          <div className="p-4 flex items-center justify-between border-b last:border-b-0 hover:bg-gray-50">
-            <div className="flex items-center">
-              <FiBookmark className="text-gray-500 mr-3" />
-              <span>{shelf.shelf_name}</span>
+        <h2 className="text-xl font-bold mb-4">Mes étagères</h2>
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {/* Statuts de lecture (affichés comme des étagères) */}
+          <Link href="/reading-status/to-read">
+            <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
+              <div className="flex items-center">
+                <FiBook className="text-blue-500 mr-3" />
+                <span>À lire</span>
+              </div>
+              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                {stats.toReadCount}
+              </span>
             </div>
-            <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-              {/* Vous pouvez ajouter le comptage des livres ici si nécessaire */}
-            </span>
-          </div>
-        </Link>
-      ))
-    ) : (
-      <p className="p-4 text-center text-gray-500">
-        Vous n'avez pas encore créé d'étagères personnalisées.
-      </p>
-    )}
-  </div>
-</div>
+          </Link>
+          
+          <Link href="/reading-status/reading">
+            <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
+              <div className="flex items-center">
+                <FiClock className="text-green-500 mr-3" />
+                <span>En cours</span>
+              </div>
+              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                {stats.readingCount}
+              </span>
+            </div>
+          </Link>
+          
+          <Link href="/reading-status/read">
+            <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
+              <div className="flex items-center">
+                <FiCheckCircle className="text-purple-500 mr-3" />
+                <span>Lu</span>
+              </div>
+              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                {stats.readCount}
+              </span>
+            </div>
+          </Link>
+          
+          <Link href="/reading-status/abandoned">
+            <div className="p-4 flex items-center justify-between hover:bg-gray-50">
+              <div className="flex items-center">
+                <FiX className="text-red-500 mr-3" />
+                <span>Abandonné</span>
+              </div>
+              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                {stats.abandonedCount}
+              </span>
+            </div>
+          </Link>
+        </div>
+        
+        {/* Étagères personnalisées */}
+        <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {customShelves.length > 0 ? (
+            customShelves.map((shelf) => (
+              <Link key={shelf.shelf_id} href={`/shelves/${shelf.shelf_id}`}>
+                <div className="p-4 flex items-center justify-between border-b last:border-b-0 hover:bg-gray-50">
+                  <div className="flex items-center">
+                    <FiBookmark className="text-gray-500 mr-3" />
+                    <span>{shelf.shelf_name}</span>
+                  </div>
+                  <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                    {/* Vous pouvez ajouter le comptage des livres ici si nécessaire */}
+                  </span>
+                </div>
+              </Link>
+            ))
+          ) : (
+            <p className="p-4 text-center text-gray-500">
+              Vous n'avez pas encore créé d'étagères personnalisées.
+            </p>
+          )}
+        </div>
+      </div>
       </div>
     </div>
   );

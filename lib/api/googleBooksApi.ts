@@ -25,11 +25,17 @@ export type GoogleBooksResponse = {
   totalItems: number;
 };
 
-export async function searchGoogleBooks(query: string, maxResults: number = 20): Promise<GoogleBookItem[]> {
+export async function searchGoogleBooks(query: string, languageCode: string = ''): Promise<GoogleBookItem[]> {
   try {
-    const response = await fetch(
-      `${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(query)}&maxResults=${maxResults}`
-    );
+    // Construire l'URL avec le filtre de langue si spécifié
+    let apiUrl = `${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(query)}&maxResults=20`;
+    
+    // Ajouter le filtre de langue si spécifié
+    if (languageCode) {
+      apiUrl += `&langRestrict=${languageCode}`;
+    }
+    
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
       throw new Error(`Google Books API responded with status: ${response.status}`);

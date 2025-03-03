@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useRouter } from 'next/router';
 import { FiSearch, FiBook, FiUser, FiBookOpen, FiGlobe, FiClock, FiX } from 'react-icons/fi';
 import debounce from 'lodash/debounce';
+import { useAuth } from '../../context/AuthContext';
 
 type Suggestion = {
   id: string;
@@ -10,6 +11,7 @@ type Suggestion = {
   type: 'title' | 'author' | 'series' | 'google_book' | 'history';
   source: 'database' | 'google_books' | 'history';
   thumbnail?: string | null;
+  languageCode?: string;
 };
 
 // Nombre maximal de recherches récentes à stocker
@@ -17,6 +19,7 @@ const MAX_RECENT_SEARCHES = 5;
 
 export default function SearchBar() {
   const router = useRouter();
+  const { preferredLanguage } = useAuth(); // Hook appelé au niveau du composant
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -99,7 +102,7 @@ export default function SearchBar() {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/search-suggestions?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/search-suggestions?q=${encodeURIComponent(query)}&lang=${preferredLanguage}`);
       if (response.ok) {
         const data = await response.json();
         setSuggestions(data.suggestions);
@@ -114,7 +117,7 @@ export default function SearchBar() {
 
   // Utiliser debounce pour ne pas envoyer trop de requêtes
   const debouncedFetchSuggestions = useRef(
-    debounce(fetchSuggestions, 300)
+    debounce((query: string) => fetchSuggestions(query), 300)
   ).current;
 
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function SearchBar() {
     } else {
       setSuggestions([]);
     }
-  }, [searchQuery, debouncedFetchSuggestions]);
+  }, [searchQuery]);
 
   // Gérer le clic en dehors pour fermer les suggestions
   useEffect(() => {
@@ -213,6 +216,43 @@ export default function SearchBar() {
     }
   };
 
+  // Import et redirection pour les livres Google
+  const importAndRedirect = async (googleBookId: string, title: string) => {
+    try {
+      setLoading(true);
+      
+      // Appeler l'API d'importation
+      const response = await fetch('/api/import-book', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ googleBookId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Import API responded with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Rediriger vers la page du livre importé
+      if (data.book_id) {
+        router.push(`/book/${data.book_id}`);
+      } else {
+        // Si l'importation échoue, rediriger vers la recherche comme fallback
+        console.error('No book_id returned after import');
+        router.push(`/search?q=${encodeURIComponent(title)}`);
+      }
+    } catch (error) {
+      console.error('Error importing book:', error);
+      // En cas d'erreur, rediriger vers la recherche
+      router.push(`/search?q=${encodeURIComponent(title)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Traiter le clic sur une suggestion
   const handleSuggestionClick = (suggestion: Suggestion) => {
     setSearchQuery(suggestion.text);
@@ -228,18 +268,21 @@ export default function SearchBar() {
     // Ajouter à l'historique
     addToRecentSearches(suggestion.text);
     
-    if (suggestion.source === 'google_books') {
-      // Pour Google Books, aller à la page de recherche avec le titre comme requête
-      router.push(`/search?q=${encodeURIComponent(suggestion.text)}`);
-    } else {
-      // Pour la base de données
+    if (suggestion.source === 'database') {
       if (suggestion.type === 'title') {
+        // Redirection directe vers la page détail du livre
         router.push(`/book/${suggestion.id}`);
       } else if (suggestion.type === 'author') {
         router.push(`/search?q=${encodeURIComponent(suggestion.text)}`);
       } else if (suggestion.type === 'series') {
         router.push(`/search?q=${encodeURIComponent(suggestion.text)}`);
       }
+    } else if (suggestion.source === 'google_books') {
+      // Option 1: Rediriger vers la recherche (simple)
+      router.push(`/search?q=${encodeURIComponent(suggestion.text)}`);
+      
+      // Option 2: Importer et rediriger (décommentez pour utiliser)
+      // importAndRedirect(suggestion.id, suggestion.text);
     }
   };
 
@@ -355,6 +398,12 @@ export default function SearchBar() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
                       {highlightMatch(suggestion.text, searchQuery)}
+                      {/* Afficher le code de langue si disponible et différent de la langue préférée */}
+                      {suggestion.languageCode && suggestion.languageCode !== preferredLanguage && (
+                        <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-1 rounded">
+                          {suggestion.languageCode.toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       {suggestion.source === 'google_books' ? 'Google Books' : 
@@ -420,6 +469,13 @@ export default function SearchBar() {
               Commencez à taper pour rechercher
             </div>
           )}
+        </div>
+      )}
+      
+      {/* Indicateur de chargement pour l'importation */}
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       )}
     </form>

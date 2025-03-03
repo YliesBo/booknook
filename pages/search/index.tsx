@@ -8,6 +8,7 @@ import {
   calculateRelevanceScore, 
   groupSeriesBooks 
 } from '../../lib/search/searchUtils';
+import { useAuth } from '../../context/AuthContext';
 
 type SortOption = 'relevance' | 'title_asc' | 'title_desc' | 'date_asc' | 'date_desc';
 type FilterOption = 'all' | 'database' | 'google_books' | 'series';
@@ -15,6 +16,7 @@ type FilterOption = 'all' | 'database' | 'google_books' | 'series';
 export default function Search() {
   const router = useRouter();
   const { q } = router.query;
+  const { preferredLanguage } = useAuth();
   const [searchQuery, setSearchQuery] = useState(q as string || '');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,14 +30,16 @@ export default function Search() {
       setSearchQuery(q as string);
       performSearch(q as string);
     }
-  }, [q]);
+  }, [q, preferredLanguage]); // Ajout de preferredLanguage comme dépendance
 
   const performSearch = async (query: string) => {
     if (!query.trim()) return;
     
     setLoading(true);
     try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      // Ajouter le paramètre de langue à l'URL
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=${preferredLanguage}`);
+      
       if (!response.ok) {
         throw new Error(`Search API responded with status: ${response.status}`);
       }
@@ -225,7 +229,8 @@ export default function Search() {
                       title: result.title,
                       authors: result.authors,
                       thumbnail: result.thumbnail,
-                      source: result.source
+                      source: result.source,
+                      languageCode: result.languageCode // Ajouter le code de langue
                     }}
                     onImport={importBook}
                   />

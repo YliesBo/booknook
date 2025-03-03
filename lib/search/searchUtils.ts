@@ -9,6 +9,7 @@ export type SearchResult = {
   thumbnail: string | null;
   publishedDate?: string;
   relevanceScore?: number; // Score de pertinence pour le tri
+  languageCode?: string; // Ajout du code de langue
 };
 
 /**
@@ -17,7 +18,8 @@ export type SearchResult = {
  */
 export function calculateRelevanceScore(
   result: SearchResult, 
-  searchQuery: string
+  searchQuery: string,
+  preferredLanguage?: string
 ): number {
   let score = 0;
   const query = searchQuery.toLowerCase().trim();
@@ -83,6 +85,11 @@ export function calculateRelevanceScore(
   // Bonus pour les livres avec date de publication
   if (result.publishedDate) {
     score += 5;
+  }
+  
+  // Bonus pour les livres dans la langue préférée
+  if (preferredLanguage && result.languageCode === preferredLanguage) {
+    score += 50; // Bonus significatif pour la langue préférée
   }
   
   return score;
