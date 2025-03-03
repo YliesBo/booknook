@@ -1,3 +1,4 @@
+// Dans pages/api/search.ts - Modification pour filtrer les doublons
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase/supabaseClient';
 import { searchGoogleBooks, GoogleBookItem } from '../../lib/api/googleBooksApi';
@@ -29,7 +30,8 @@ export default async function handler(
         book_id,
         title,
         thumbnail,
-        published_date
+        published_date,
+        google_book_id
       `)
       .ilike('title', `%${query}%`)
       .limit(10);
@@ -38,6 +40,8 @@ export default async function handler(
 
     // Pour chaque livre de la base de données, récupérer ses auteurs
     const dbResults: SearchResult[] = [];
+    const existingGoogleBookIds = new Set<string>(); // Ensemble pour suivre les IDs Google Books déjà dans la DB
+    
     for (const book of dbBooks || []) {
       const { data: authorsData } = await supabase
         .from('book_authors')
@@ -69,26 +73,33 @@ export default async function handler(
       // Calculer le score de pertinence
       result.relevanceScore = calculateRelevanceScore(result, query as string);
       dbResults.push(result);
+      
+      // Si le livre a un ID Google Books, l'ajouter à notre ensemble
+      if (book.google_book_id) {
+        existingGoogleBookIds.add(book.google_book_id);
+      }
     }
 
     // Recherche via Google Books API
     const googleBooks = await searchGoogleBooks(query);
     
-    // Transformer les résultats de Google Books au même format
-    const googleResults: SearchResult[] = googleBooks.map(book => {
-      const result: SearchResult = {
-        source: 'google_books',
-        id: book.id,
-        title: book.volumeInfo.title,
-        authors: book.volumeInfo.authors || [],
-        thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
-        publishedDate: book.volumeInfo.publishedDate
-      };
+    // Transformer les résultats de Google Books en filtrant ceux déjà dans la base de données
+    const googleResults: SearchResult[] = googleBooks
+      .filter(book => !existingGoogleBookIds.has(book.id)) // Filtrer les livres déjà présents
+      .map(book => {
+        const result: SearchResult = {
+          source: 'google_books',
+          id: book.id,
+          title: book.volumeInfo.title,
+          authors: book.volumeInfo.authors || [],
+          thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
+          publishedDate: book.volumeInfo.publishedDate
+        };
 
-      // Calculer le score de pertinence
-      result.relevanceScore = calculateRelevanceScore(result, query as string);
-      return result;
-    });
+        // Calculer le score de pertinence
+        result.relevanceScore = calculateRelevanceScore(result, query as string);
+        return result;
+      });
 
     // Combiner et trier les résultats par score de pertinence
     const results = [...dbResults, ...googleResults]

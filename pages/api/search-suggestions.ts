@@ -1,4 +1,4 @@
-// pages/api/search-suggestions.ts
+// pages/api/search-suggestions.ts - Modification pour filtrer les doublons
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase/supabaseClient';
 
@@ -27,14 +27,16 @@ export default async function handler(
 
   try {
     const suggestions: Suggestion[] = [];
+    const existingGoogleBookIds = new Set<string>();
+    const existingTitles = new Set<string>();
 
     // Récupérer les suggestions de la base de données
     // 1. Recherche de titres de livres
     const { data: titleData } = await supabase
       .from('books')
-      .select('book_id, title, thumbnail')
+      .select('book_id, title, thumbnail, google_book_id')
       .ilike('title', `%${query}%`)
-      .limit(5); // Augmenté de 3 à 5
+      .limit(5);
 
     if (titleData) {
       titleData.forEach(book => {
@@ -45,6 +47,12 @@ export default async function handler(
           source: 'database',
           thumbnail: book.thumbnail
         });
+        
+        // Garder une trace des titres et des IDs Google Books
+        existingTitles.add(book.title.toLowerCase());
+        if (book.google_book_id) {
+          existingGoogleBookIds.add(book.google_book_id);
+        }
       });
     }
 
@@ -53,7 +61,7 @@ export default async function handler(
       .from('authors')
       .select('author_id, author_name')
       .ilike('author_name', `%${query}%`)
-      .limit(3); // Augmenté de 2 à 3
+      .limit(3);
 
     if (authorData) {
       authorData.forEach(author => {
@@ -86,13 +94,24 @@ export default async function handler(
 
     // Récupérer les suggestions de Google Books API
     try {
-      const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=5`; // Augmenté de 3 à 5
+      const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=5`;
       const response = await fetch(googleBooksUrl);
       const data = await response.json();
       
       if (data.items && Array.isArray(data.items)) {
         data.items.forEach(item => {
+          // Vérifier si ce livre de Google Books existe déjà dans notre DB
+          if (existingGoogleBookIds.has(item.id)) {
+            return; // Ignorer ce livre
+          }
+          
           if (item.volumeInfo && item.volumeInfo.title) {
+            // Vérification supplémentaire par titre
+            const title = item.volumeInfo.title.toLowerCase();
+            if (existingTitles.has(title)) {
+              return; // Ignorer les livres avec des titres qui existent déjà
+            }
+            
             const thumbnail = item.volumeInfo.imageLinks?.thumbnail || null;
             
             suggestions.push({
@@ -102,6 +121,9 @@ export default async function handler(
               source: 'google_books',
               thumbnail: thumbnail
             });
+            
+            // Ajouter ce titre à l'ensemble des titres existants
+            existingTitles.add(title);
           }
         });
       }
