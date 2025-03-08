@@ -1,3 +1,4 @@
+// pages/profile/index.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useProtectedRoute } from '../../lib/hooks/useProtectedRoute';
@@ -6,7 +7,9 @@ import Link from 'next/link';
 import { updateUsername, updateBio, getUserProfile } from '../../lib/users/userUtils';
 import { readingStatusLabels, getBooksWithStatus } from '../../lib/reading/readingStatusUtils';
 import { FiEdit2, FiBookOpen, FiBook, FiClock, FiBookmark, FiPauseCircle, FiCheckCircle, FiX, FiGlobe } from 'react-icons/fi';
-
+import AchievementPreview from '../../components/achievements/AchievementPreview';
+import AchievementNotification from '../../components/achievements/AchievementNotification';
+import { processAchievementEvents } from '../../lib/achievements/achievementProcessor';
 
 type UserStats = {
   totalBooks: number;
@@ -65,10 +68,22 @@ export default function Profile() {
 
   useEffect(() => {
     if (user) {
-      fetchUserProfile();
-      fetchUserStats();
-      fetchRecentActivity();
-      fetchReadingStatuses();
+      // First process any pending achievement events, then fetch data
+      const initializeData = async () => {
+        try {
+          // Process achievement events before loading the page
+          await processAchievementEvents();
+        } catch (error) {
+          console.error('Error processing achievement events:', error);
+        }
+        
+        fetchUserProfile();
+        fetchUserStats();
+        fetchRecentActivity();
+        fetchReadingStatuses();
+      };
+      
+      initializeData();
     }
   }, [user]);
 
@@ -497,84 +512,92 @@ export default function Profile() {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <div>
-        <h2 className="text-xl font-bold mb-4">Mes étagères</h2>
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Statuts de lecture (affichés comme des étagères) */}
-          <Link href="/reading-status/to-read">
-            <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
-              <div className="flex items-center">
-                <FiBook className="text-blue-500 mr-3" />
-                <span>À lire</span>
+        <div>
+          <h2 className="text-xl font-bold mb-4">Mes étagères</h2>
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            {/* Statuts de lecture (affichés comme des étagères) */}
+            <Link href="/reading-status/to-read">
+              <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
+                <div className="flex items-center">
+                  <FiBook className="text-blue-500 mr-3" />
+                  <span>À lire</span>
+                </div>
+                <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                  {stats.toReadCount}
+                </span>
               </div>
-              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-                {stats.toReadCount}
-              </span>
-            </div>
-          </Link>
+            </Link>
+            
+            <Link href="/reading-status/reading">
+              <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
+                <div className="flex items-center">
+                  <FiClock className="text-green-500 mr-3" />
+                  <span>En cours</span>
+                </div>
+                <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                  {stats.readingCount}
+                </span>
+              </div>
+            </Link>
+            
+            <Link href="/reading-status/read">
+              <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
+                <div className="flex items-center">
+                  <FiCheckCircle className="text-purple-500 mr-3" />
+                  <span>Lu</span>
+                </div>
+                <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                  {stats.readCount}
+                </span>
+              </div>
+            </Link>
+            
+            <Link href="/reading-status/abandoned">
+              <div className="p-4 flex items-center justify-between hover:bg-gray-50">
+                <div className="flex items-center">
+                  <FiX className="text-red-500 mr-3" />
+                  <span>Abandonné</span>
+                </div>
+                <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                  {stats.abandonedCount}
+                </span>
+              </div>
+            </Link>
+          </div>
           
-          <Link href="/reading-status/reading">
-            <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
-              <div className="flex items-center">
-                <FiClock className="text-green-500 mr-3" />
-                <span>En cours</span>
-              </div>
-              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-                {stats.readingCount}
-              </span>
-            </div>
-          </Link>
-          
-          <Link href="/reading-status/read">
-            <div className="p-4 flex items-center justify-between border-b hover:bg-gray-50">
-              <div className="flex items-center">
-                <FiCheckCircle className="text-purple-500 mr-3" />
-                <span>Lu</span>
-              </div>
-              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-                {stats.readCount}
-              </span>
-            </div>
-          </Link>
-          
-          <Link href="/reading-status/abandoned">
-            <div className="p-4 flex items-center justify-between hover:bg-gray-50">
-              <div className="flex items-center">
-                <FiX className="text-red-500 mr-3" />
-                <span>Abandonné</span>
-              </div>
-              <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-                {stats.abandonedCount}
-              </span>
-            </div>
-          </Link>
+          {/* Étagères personnalisées */}
+          <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            {customShelves.length > 0 ? (
+              customShelves.map((shelf) => (
+                <Link key={shelf.shelf_id} href={`/shelves/${shelf.shelf_id}`}>
+                  <div className="p-4 flex items-center justify-between border-b last:border-b-0 hover:bg-gray-50">
+                    <div className="flex items-center">
+                      <FiBookmark className="text-gray-500 mr-3" />
+                      <span>{shelf.shelf_name}</span>
+                    </div>
+                    <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+                      {/* Vous pouvez ajouter le comptage des livres ici si nécessaire */}
+                    </span>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <p className="p-4 text-center text-gray-500">
+                Vous n'avez pas encore créé d'étagères personnalisées.
+              </p>
+            )}
+          </div>
         </div>
         
-        {/* Étagères personnalisées */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Mes étagères personnalisées</h2>
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {customShelves.length > 0 ? (
-            customShelves.map((shelf) => (
-              <Link key={shelf.shelf_id} href={`/shelves/${shelf.shelf_id}`}>
-                <div className="p-4 flex items-center justify-between border-b last:border-b-0 hover:bg-gray-50">
-                  <div className="flex items-center">
-                    <FiBookmark className="text-gray-500 mr-3" />
-                    <span>{shelf.shelf_name}</span>
-                  </div>
-                  <span className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-                    {/* Vous pouvez ajouter le comptage des livres ici si nécessaire */}
-                  </span>
-                </div>
-              </Link>
-            ))
-          ) : (
-            <p className="p-4 text-center text-gray-500">
-              Vous n'avez pas encore créé d'étagères personnalisées.
-            </p>
-          )}
+        {/* Achievements section */}
+        <div>
+          <AchievementPreview userId={user?.id || ''} />
         </div>
       </div>
-      </div>
+
+      {/* Achievement notification component */}
+      <AchievementNotification userId={user?.id || ''} />
     </div>
   );
 }

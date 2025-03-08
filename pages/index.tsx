@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase/supabaseClient';
 import Link from 'next/link';
 import { FiTrendingUp, FiClock, FiStar, FiHeart } from 'react-icons/fi';
 import BookCard from '../components/books/BookCard';
+import AchievementPreview from '../components/achievements/AchievementPreview';
+import AchievementNotification from '../components/achievements/AchievementNotification';
+
 
 // Types simplifiés
 type Book = {
@@ -273,6 +276,17 @@ export default function Home() {
               </p>
             </div>
           )}
+
+{user && (
+  <div className="mt-8">
+    <AchievementPreview userId={user.id} />
+  </div>
+)}
+
+{/* Achievement notification component */}
+{user && (
+  <AchievementNotification userId={user.id} />
+)}
         </div>
       )}
     </div>
