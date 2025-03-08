@@ -19,6 +19,8 @@ export interface UserAchievement {
   completed: boolean;
   completed_at: string | null;
   notified: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Ensure UUIDs are loaded before using achievement functions
@@ -45,7 +47,8 @@ export async function getUserAchievements(userId: string): Promise<UserAchieveme
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('Error fetching user achievements:', error);
+    const err = error as Error;
+    console.error('Error fetching user achievements:', err.message);
     return [];
   }
 }
@@ -65,7 +68,8 @@ export async function getUserAchievement(userId: string, achievementId: string):
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
     return data;
   } catch (error) {
-    console.error(`Error fetching user achievement ${achievementId}:`, error);
+    const err = error as Error;
+    console.error(`Error fetching user achievement ${achievementId}:`, err.message);
     return null;
   }
 }
@@ -87,32 +91,31 @@ export async function initializeAchievement(userId: string, achievementId: strin
     }
 
     // Create new achievement progress
-    const newAchievement: Omit<UserAchievement, 'achievement_id'> = {
+    const newAchievement = {
       user_id: userId,
+      achievement_id: achievementId,
       progress: {
         current: 0,
         target: achievementDef.requirements.target,
       },
       completed: false,
       completed_at: null,
-      notified: false
+      notified: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     const { data, error } = await supabase
       .from('user_achievements')
-      .insert({
-        ...newAchievement,
-        achievement_id: achievementId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(newAchievement)
       .select()
       .single();
 
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error(`Error initializing achievement ${achievementId}:`, error);
+    const err = error as Error;
+    console.error(`Error initializing achievement ${achievementId}:`, err.message);
     return null;
   }
 }
@@ -147,6 +150,7 @@ export async function updateAchievementProgress(
     const newProgress = progress;
     const isCompleted = newProgress >= target;
 
+    // Type-safe partial update object
     const updatedAchievement: Partial<UserAchievement> = {
       progress: {
         ...userAchievement.progress,
@@ -179,7 +183,8 @@ export async function updateAchievementProgress(
 
     return data;
   } catch (error) {
-    console.error(`Error updating achievement ${achievementId} progress:`, error);
+    const err = error as Error;
+    console.error(`Error updating achievement ${achievementId} progress:`, err.message);
     return null;
   }
 }
@@ -198,7 +203,8 @@ export async function markAchievementAsNotified(userId: string, achievementId: s
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error(`Error marking achievement ${achievementId} as notified:`, error);
+    const err = error as Error;
+    console.error(`Error marking achievement ${achievementId} as notified:`, err.message);
     return false;
   }
 }
@@ -235,7 +241,8 @@ export async function createAchievementEvent(
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error(`Error creating achievement event for ${achievementId}:`, error);
+    const err = error as Error;
+    console.error(`Error creating achievement event for ${achievementId}:`, err.message);
     return false;
   }
 }
@@ -284,7 +291,8 @@ export async function checkMilestoneAchievements(userId: string): Promise<string
 
     return unlocked;
   } catch (error) {
-    console.error('Error checking milestone achievements:', error);
+    const err = error as Error;
+    console.error('Error checking milestone achievements:', err.message);
     return [];
   }
 }
@@ -332,7 +340,8 @@ export async function checkGenreDiversityAchievements(userId: string): Promise<s
 
     return unlocked;
   } catch (error) {
-    console.error('Error checking genre diversity achievements:', error);
+    const err = error as Error;
+    console.error('Error checking genre diversity achievements:', err.message);
     return [];
   }
 }
@@ -380,7 +389,8 @@ export async function checkAuthorCollectionAchievements(userId: string): Promise
 
     return unlocked;
   } catch (error) {
-    console.error('Error checking author collection achievements:', error);
+    const err = error as Error;
+    console.error('Error checking author collection achievements:', err.message);
     return [];
   }
 }
@@ -427,57 +437,83 @@ export async function checkSeriesCompletionAchievements(userId: string): Promise
 
     return unlocked;
   } catch (error) {
-    console.error('Error checking series completion achievements:', error);
+    const err = error as Error;
+    console.error('Error checking series completion achievements:', err.message);
     return [];
   }
 }
 
 // Check for reading streak achievements
 export async function checkReadingStreakAchievements(userId: string): Promise<string[]> {
-  if (!userId) return [];
-
-  try {
-    await ensureMappingLoaded();
-    
-    // Get current reading streak
-    const { data, error } = await supabase.rpc('get_reading_streak', {
-      user_id_param: userId
-    });
-
-    if (error) throw error;
-    
-    const currentStreak = data || 0;
-    const unlocked: string[] = [];
-
-    // Check reading streak achievements
-    const streakAchievements = ACHIEVEMENT_DEFINITIONS.filter(a => a.category === 'consistency');
-    
-    for (const achievement of streakAchievements) {
-      if (currentStreak >= achievement.requirements.target) {
-        const achievementId = getAchievementUUID(achievement.key);
-        if (!achievementId) {
-          console.warn(`No UUID found for achievement: ${achievement.key}`);
-          continue;
+    if (!userId) return [];
+  
+    try {
+      await ensureMappingLoaded();
+      
+      // Get current reading streak
+      let currentStreak = 0;
+      try {
+        const { data, error } = await supabase.rpc('get_reading_streak', {
+          user_id_param: userId
+        });
+  
+        if (error) {
+          console.warn('Error getting reading streak from RPC:', error.message);
+          // Fall back to a direct query if the RPC function fails
+          const { count: booksRead } = await supabase
+            .from('reading_status')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('status', 'read');
+            
+          currentStreak = booksRead || 0;
+        } else {
+          currentStreak = data || 0;
         }
-        
-        const updated = await updateAchievementProgress(
-          userId, 
-          achievementId, 
-          currentStreak
-        );
-        
-        if (updated && updated.completed && !updated.notified) {
-          unlocked.push(achievementId);
+      } catch (rpcError) {
+        console.warn('Exception in RPC call:', rpcError);
+        // Fallback implementation
+        const { count: booksRead } = await supabase
+          .from('reading_status')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'read');
+          
+        currentStreak = booksRead || 0;
+      }
+      
+      const unlocked: string[] = [];
+  
+      // Check reading streak achievements
+      const streakAchievements = ACHIEVEMENT_DEFINITIONS.filter(a => a.category === 'consistency');
+      
+      for (const achievement of streakAchievements) {
+        if (currentStreak >= achievement.requirements.target) {
+          const achievementId = getAchievementUUID(achievement.key);
+          if (!achievementId) {
+            console.warn(`No UUID found for achievement: ${achievement.key}`);
+            continue;
+          }
+          
+          const updated = await updateAchievementProgress(
+            userId, 
+            achievementId, 
+            currentStreak
+          );
+          
+          if (updated && updated.completed && !updated.notified) {
+            unlocked.push(achievementId);
+          }
         }
       }
+  
+      return unlocked;
+    } catch (error) {
+      const err = error as Error;
+      console.error('Error checking reading streak achievements:', err.message);
+      return [];
     }
-
-    return unlocked;
-  } catch (error) {
-    console.error('Error checking reading streak achievements:', error);
-    return [];
   }
-}
 
 // Check all achievements for a user
 export async function checkAllAchievements(userId: string): Promise<string[]> {
@@ -498,7 +534,8 @@ export async function checkAllAchievements(userId: string): Promise<string[]> {
       ...streakAchievements
     ];
   } catch (error) {
-    console.error('Error checking all achievements:', error);
+    const err = error as Error;
+    console.error('Error checking all achievements:', err.message);
     return [];
   }
 }
@@ -518,7 +555,8 @@ export async function getUnnotifiedAchievements(userId: string): Promise<UserAch
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('Error fetching unnotified achievements:', error);
+    const err = error as Error;
+    console.error('Error fetching unnotified achievements:', err.message);
     return [];
   }
 }
@@ -567,13 +605,15 @@ export async function processAchievementEvents(): Promise<number> {
         
         processedCount++;
       } catch (eventError) {
-        console.error(`Error processing event ${event.event_id}:`, eventError);
+        const err = eventError as Error;
+        console.error(`Error processing event ${event.event_id}:`, err.message);
       }
     }
     
     return processedCount;
   } catch (error) {
-    console.error('Error processing achievement events:', error);
+    const err = error as Error;
+    console.error('Error processing achievement events:', err.message);
     return 0;
   }
 }

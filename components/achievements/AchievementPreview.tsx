@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FiAward, FiChevronRight } from 'react-icons/fi';
-import { getUserAchievements, checkAllAchievements } from '../../lib/achievements/achievementService';
+import { getUserAchievements } from '../../lib/achievements/achievementService';
 import { getAchievementById, ACHIEVEMENTS } from '../../lib/achievements/achievementTypes';
 import AchievementIcon from './AchievementIcon';
 
@@ -26,10 +26,7 @@ export default function AchievementPreview({ userId, showCount = 4 }: Achievemen
   const fetchAchievements = async () => {
     setLoading(true);
     try {
-      // Check for new achievements (you might want to avoid this on preview components for performance)
-      await checkAllAchievements(userId);
-
-      // Get user achievements
+      // Only fetch current achievements, don't check for new ones
       const achievements = await getUserAchievements(userId);
       
       // Enrich with achievement details
@@ -50,15 +47,19 @@ export default function AchievementPreview({ userId, showCount = 4 }: Achievemen
       }, 0);
 
       setUserAchievements(enrichedAchievements);
+      setTotalPoints(points);
       
-      // Get recently completed achievements
+      // Also update any recently completed achievements
       const completed = enrichedAchievements
         .filter(a => a.completed)
-        .sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())
+        .sort((a, b) => {
+          const dateA = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+          const dateB = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+          return dateB - dateA;
+        })
         .slice(0, showCount);
         
       setRecentAchievements(completed);
-      setTotalPoints(points);
     } catch (error) {
       console.error('Error fetching achievements:', error);
     } finally {

@@ -72,6 +72,23 @@ export async function setReadingStatus(userId: string, bookId: string, status: R
       });
       
     if (error) throw error;
+    
+    // If status is 'read', create an achievement event
+    if (status === 'read') {
+      await supabase
+        .from('achievement_events')
+        .insert({
+          user_id: userId,
+          event_type: 'status_changed_to_read',
+          event_data: {
+            book_id: bookId,
+            status: status
+          },
+          processed: false,
+          created_at: new Date().toISOString()
+        });
+    }
+    
     return { success: true };
   } catch (error: any) {
     console.error('Erreur lors de la mise à jour du statut de lecture:', error);

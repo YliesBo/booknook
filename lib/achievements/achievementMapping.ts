@@ -1,6 +1,17 @@
 // lib/achievements/achievementMapping.ts
 import { supabase } from '../supabase/supabaseClient';
 
+
+interface DatabaseAchievement {
+    [key: string]: any; // For the dynamic ID column
+    title?: string;
+    requirements?: {
+      target?: number;
+      type?: string;
+    };
+  }
+
+
 // Type for the achievement definition
 type AchievementDefinition = {
   key: string;      // Friendly key like 'books-read-5'
@@ -308,16 +319,17 @@ export async function loadAchievementUUIDs(): Promise<boolean> {
     // Build mapping based on title or requirements.target matching
     ACHIEVEMENT_DEFINITIONS.forEach(def => {
       // Try to find matching achievement in database
-      const match = data.find(a => 
-        a.title === def.title || 
-        (a.requirements?.target === def.requirements.target && 
-         a.requirements?.type === def.requirements.type)
-      );
+      const match = data.find(a => {
+        const dbAchievement = a as DatabaseAchievement;
+        return dbAchievement.title === def.title || 
+          (dbAchievement.requirements?.target === def.requirements.target && 
+           dbAchievement.requirements?.type === def.requirements.type);
+      });
       
       if (match) {
         // Use the correct column for the ID value
-        const id = match[idColumnName];
-        achievementIdMap[def.key] = id;
+        const id = match[idColumnName as keyof typeof match];
+        achievementIdMap[def.key] = id as string;
         console.log(`Mapped "${def.key}" to ID: ${id}`);
       } else {
         console.warn(`No database match found for achievement: ${def.key} (${def.title})`);
@@ -326,7 +338,8 @@ export async function loadAchievementUUIDs(): Promise<boolean> {
     
     return true;
   } catch (error) {
-    console.error('Error loading achievement UUIDs:', error);
+    const err = error as Error;
+    console.error('Error loading achievement UUIDs:', err.message);
     return false;
   }
 }

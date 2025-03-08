@@ -19,11 +19,31 @@ export default async function handler(
   }
 
   try {
-    // Get user session
-    const { data: { session } } = await supabase.auth.getSession();
+    // Check for auth cookie instead of relying on getSession()
+    const supabaseCookie = req.cookies['supabase-auth-token'];
     
-    if (!session) {
-      return res.status(401).json({ error: 'Unauthorized - user not logged in' });
+    if (!supabaseCookie) {
+      return res.status(401).json({ 
+        error: 'Unauthorized - auth cookie missing',
+        session: null
+      });
+    }
+    
+    // Get user session from the API context
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      return res.status(401).json({ 
+        error: 'Error retrieving session', 
+        details: sessionError.message
+      });
+    }
+    
+    if (!session || !session.user) {
+      return res.status(401).json({ 
+        error: 'Unauthorized - session invalid',
+        sessionExists: !!session
+      });
     }
     
     // Initialize achievement
@@ -37,8 +57,11 @@ export default async function handler(
       success: true,
       achievement
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error initializing achievement:', error);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ 
+      error: 'Server error', 
+      message: error.message || 'Unknown error'
+    });
   }
 }

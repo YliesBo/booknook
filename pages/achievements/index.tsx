@@ -1,22 +1,23 @@
 // pages/achievements/index.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useProtectedRoute } from '../../lib/hooks/useProtectedRoute';
 import Link from 'next/link';
 import { FiAward, FiArrowLeft, FiFilter, FiChevronDown } from 'react-icons/fi';
-import { getUserAchievements, checkAllAchievements } from '../../lib/achievements/achievementService';
+import { getUserAchievements, initializeAchievement } from '../../lib/achievements/achievementService';
 import { getAchievementById, AchievementCategory, ACHIEVEMENTS } from '../../lib/achievements/achievementTypes';
 import AchievementCard from '../../components/achievements/AchievementCard';
 
 export default function Achievements() {
   const { user } = useAuth();
-  useProtectedRoute();
-
+  useProtectedRoute(); // This already handles the protection and redirect
+  
   const [userAchievements, setUserAchievements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<AchievementCategory | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
+  const initializedRef = useRef(false); // Track if initialization was attempted
 
   useEffect(() => {
     if (user) {
@@ -27,11 +28,6 @@ export default function Achievements() {
   const fetchAchievements = async () => {
     setLoading(true);
     try {
-      // Check for new achievements
-      if (user) {
-        await checkAllAchievements(user.id);
-      }
-
       // Get all user achievements
       const achievements = await getUserAchievements(user?.id || '');
       
@@ -60,6 +56,39 @@ export default function Achievements() {
       setLoading(false);
     }
   };
+
+  // Initialize achievements that don't exist in the database - only once
+  useEffect(() => {
+    if (user && userAchievements.length > 0 && !initializedRef.current) {
+      initializedRef.current = true; // Mark as initialized to prevent repeated attempts
+      
+      const existingIds = new Set(userAchievements.map(a => a.achievement_id));
+      
+      // Find achievements that need to be initialized
+      const missingAchievements = ACHIEVEMENTS.filter(a => !existingIds.has(a.id));
+      
+      if (missingAchievements.length > 0) {
+        console.log(`Initializing ${missingAchievements.length} missing achievements`);
+        
+        // This could be optimized with a batch insert
+        const initializeAll = async () => {
+          for (const achievement of missingAchievements) {
+            try {
+              // Use direct service call instead of API fetch
+              await initializeAchievement(user.id, achievement.id);
+            } catch (error) {
+              console.error(`Error initializing achievement ${achievement.id}:`, error);
+            }
+          }
+          
+          // Refresh achievements after initialization
+          fetchAchievements();
+        };
+        
+        initializeAll();
+      }
+    }
+  }, [user, userAchievements]);
 
   const getCompletedCount = () => {
     return userAchievements.filter(a => a.completed).length;
@@ -102,46 +131,6 @@ export default function Achievements() {
       default: return 'Autres';
     }
   };
-
-  // Initialize achievements that don't exist in the database
-  useEffect(() => {
-    if (user && userAchievements.length > 0) {
-      const existingIds = new Set(userAchievements.map(a => a.achievement_id));
-      
-      // Find achievements that need to be initialized
-      const missingAchievements = ACHIEVEMENTS.filter(a => !existingIds.has(a.id));
-      
-      if (missingAchievements.length > 0) {
-        // This could be optimized with a batch insert
-        const initializeAll = async () => {
-          for (const achievement of missingAchievements) {
-            try {
-              const response = await fetch('/api/achievements/initialize', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  achievementId: achievement.id
-                }),
-              });
-              
-              if (!response.ok) {
-                console.error(`Failed to initialize achievement ${achievement.id}`);
-              }
-            } catch (error) {
-              console.error(`Error initializing achievement ${achievement.id}:`, error);
-            }
-          }
-          
-          // Refresh achievements after initialization
-          fetchAchievements();
-        };
-        
-        initializeAll();
-      }
-    }
-  }, [user, userAchievements]);
 
   if (loading) {
     return (

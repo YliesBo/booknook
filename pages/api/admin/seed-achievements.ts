@@ -122,7 +122,10 @@ export default async function handler(
       return res.status(500).json({ 
         error: 'Error seeding achievements', 
         details: error.message,
-        query: error.query
+        // Remove the query property or use a safe access pattern
+        ...(typeof error === 'object' && error !== null && 'query' in error 
+          ? { query: (error as any).query } 
+          : {})
       });
     }
 
