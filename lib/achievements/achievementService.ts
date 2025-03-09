@@ -120,6 +120,72 @@ export async function initializeAchievement(userId: string, achievementId: strin
   }
 }
 
+// Initialize all achievements for a user at once
+export async function initializeMissingAchievements(userId: string): Promise<number> {
+  if (!userId) return 0;
+
+  try {
+    await ensureMappingLoaded();
+    
+    // Get all achievements the user already has
+    const { data: existingAchievements, error: existingError } = await supabase
+      .from('user_achievements')
+      .select('achievement_id')
+      .eq('user_id', userId);
+      
+    if (existingError) throw existingError;
+    
+    // Create a set of existing achievement IDs for fast lookup
+    const existingIds = new Set((existingAchievements || []).map(a => a.achievement_id));
+    
+    // Find achievements that need to be added
+    const missingAchievements = [];
+    
+    for (const def of ACHIEVEMENT_DEFINITIONS) {
+      const achievementId = getAchievementUUID(def.key);
+      if (!achievementId) {
+        console.warn(`No UUID found for achievement: ${def.key}`);
+        continue;
+      }
+      
+      if (!existingIds.has(achievementId)) {
+        missingAchievements.push({
+          user_id: userId,
+          achievement_id: achievementId,
+          progress: {
+            current: 0,
+            target: def.requirements.target,
+          },
+          completed: false,
+          completed_at: null,
+          notified: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+    
+    console.log(`Initializing ${missingAchievements.length} missing achievements for user ${userId}`);
+    
+    if (missingAchievements.length === 0) {
+      return 0;
+    }
+    
+    // Insert all missing achievements in a single batch
+    const { data, error } = await supabase
+      .from('user_achievements')
+      .insert(missingAchievements);
+      
+    if (error) throw error;
+    
+    return missingAchievements.length;
+  } catch (error) {
+    const err = error as Error;
+    console.error('Error initializing missing achievements:', err.message);
+    return 0;
+  }
+}
+
 // Update achievement progress
 export async function updateAchievementProgress(
   userId: string, 
@@ -536,6 +602,24 @@ export async function checkAllAchievements(userId: string): Promise<string[]> {
   } catch (error) {
     const err = error as Error;
     console.error('Error checking all achievements:', err.message);
+    return [];
+  }
+}
+
+// Instead of using checkAllAchievements directly in components,
+// Use this wrapper that ensures all achievements are initialized first
+export async function ensureAndCheckAchievements(userId: string): Promise<string[]> {
+  if (!userId) return [];
+
+  try {
+    // First make sure all achievements are initialized
+    await initializeMissingAchievements(userId);
+    
+    // Then check for new achievements
+    return await checkAllAchievements(userId);
+  } catch (error) {
+    const err = error as Error;
+    console.error('Error in ensureAndCheckAchievements:', err.message);
     return [];
   }
 }

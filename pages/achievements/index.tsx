@@ -3,32 +3,66 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useProtectedRoute } from '../../lib/hooks/useProtectedRoute';
 import Link from 'next/link';
-import { FiAward, FiArrowLeft, FiFilter, FiChevronDown } from 'react-icons/fi';
-import { getUserAchievements, initializeAchievement } from '../../lib/achievements/achievementService';
-import { getAchievementById, AchievementCategory, ACHIEVEMENTS } from '../../lib/achievements/achievementTypes';
+import { FiAward, FiArrowLeft, FiFilter, FiChevronDown, FiAlertTriangle } from 'react-icons/fi';
+import { 
+  getUserAchievements, 
+  initializeMissingAchievements,
+  ensureAndCheckAchievements 
+} from '../../lib/achievements/achievementService';
+import { 
+  getAchievementById, 
+  AchievementCategory, 
+  ACHIEVEMENTS 
+} from '../../lib/achievements/achievementTypes';
+import { loadAchievementUUIDs } from '../../lib/achievements/achievementMapping';
 import AchievementCard from '../../components/achievements/AchievementCard';
+import AchievementsFallback from '../../components/achievements/AchievementsFallback';
 
 export default function Achievements() {
   const { user } = useAuth();
-  useProtectedRoute(); // This already handles the protection and redirect
+  useProtectedRoute();
   
   const [userAchievements, setUserAchievements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<AchievementCategory | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
-  const initializedRef = useRef(false); // Track if initialization was attempted
+  const [systemReady, setSystemReady] = useState(false);
+  const initializedRef = useRef(false);
 
+  // First make sure achievement UUIDs are loaded
   useEffect(() => {
-    if (user) {
+    const prepareSystem = async () => {
+      try {
+        const loaded = await loadAchievementUUIDs();
+        setSystemReady(loaded);
+      } catch (error) {
+        console.error('Error loading achievement UUIDs:', error);
+        setError('Could not load achievement definitions');
+        setSystemReady(false);
+      }
+    };
+    
+    prepareSystem();
+  }, []);
+
+  // Then fetch achievements when user and system are ready
+  useEffect(() => {
+    if (user && systemReady) {
       fetchAchievements();
     }
-  }, [user]);
+  }, [user, systemReady]);
 
   const fetchAchievements = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Get all user achievements
+      // First ensure all achievements are initialized
+      await initializeMissingAchievements(user?.id || '');
+      
+      // Then get all user achievements
       const achievements = await getUserAchievements(user?.id || '');
       
       // Enrich with achievement details
@@ -38,7 +72,7 @@ export default function Achievements() {
           ...userAchievement,
           details: achievementDetails
         };
-      });
+      }).filter(a => a.details); // Filter out any with missing details
 
       // Calculate total points
       const points = enrichedAchievements.reduce((sum, achievement) => {
@@ -50,45 +84,35 @@ export default function Achievements() {
 
       setUserAchievements(enrichedAchievements);
       setTotalPoints(points);
+      initializedRef.current = true;
     } catch (error) {
       console.error('Error fetching achievements:', error);
+      setError('Failed to load achievements. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Initialize achievements that don't exist in the database - only once
+  // Check for new achievements in the background
   useEffect(() => {
-    if (user && userAchievements.length > 0 && !initializedRef.current) {
-      initializedRef.current = true; // Mark as initialized to prevent repeated attempts
-      
-      const existingIds = new Set(userAchievements.map(a => a.achievement_id));
-      
-      // Find achievements that need to be initialized
-      const missingAchievements = ACHIEVEMENTS.filter(a => !existingIds.has(a.id));
-      
-      if (missingAchievements.length > 0) {
-        console.log(`Initializing ${missingAchievements.length} missing achievements`);
-        
-        // This could be optimized with a batch insert
-        const initializeAll = async () => {
-          for (const achievement of missingAchievements) {
-            try {
-              // Use direct service call instead of API fetch
-              await initializeAchievement(user.id, achievement.id);
-            } catch (error) {
-              console.error(`Error initializing achievement ${achievement.id}:`, error);
-            }
-          }
-          
-          // Refresh achievements after initialization
+    if (user && systemReady && initializedRef.current) {
+      const checkForNewAchievements = async () => {
+        try {
+          // Use the safer wrapper that ensures initialization first
+          await ensureAndCheckAchievements(user.id);
+          // Refresh the achievements list
           fetchAchievements();
-        };
-        
-        initializeAll();
-      }
+        } catch (error) {
+          console.error('Error checking for new achievements:', error);
+          // Don't update state or show error to user, keep this quiet
+        }
+      };
+      
+      // Run the check after a short delay
+      const timer = setTimeout(checkForNewAchievements, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [user, userAchievements]);
+  }, [user, systemReady, initializedRef.current]);
 
   const getCompletedCount = () => {
     return userAchievements.filter(a => a.completed).length;
@@ -137,6 +161,21 @@ export default function Achievements() {
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <AchievementsFallback error={error}>
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={fetchAchievements}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
+          >
+            Réessayer
+          </button>
+        </div>
+      </AchievementsFallback>
     );
   }
 

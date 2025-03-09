@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../../lib/supabase/supabaseClient';
 import { ACHIEVEMENT_DEFINITIONS } from '../../../lib/achievements/achievementMapping';
+import { stringToUUID } from '../../../lib/achievements/achievementTypes';
 
 export default async function handler(
   req: NextApiRequest,
@@ -19,127 +20,116 @@ export default async function handler(
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // First check if the achievements table even exists
-    let tableExists = false;
+    // First check if the achievements table exists
     try {
-      // Try to query achievements table
-      const { data, error } = await supabase
-        .from('achievements')
-        .select('*')
-        .limit(1);
-      
-      tableExists = !error;
-    } catch (error) {
-      tableExists = false;
-    }
-
-    if (!tableExists) {
-      return res.status(200).json({ 
-        message: "The achievements table doesn't exist. Please create it first.",
-        exists: false,
-        tableNeeded: true
+      // Try to query the achievement table schema
+      const { data: schema, error: schemaError } = await supabase.rpc('get_table_schema', { 
+        table_name: 'achievements' 
       });
-    }
-
-    // Since we know the table exists, let's check what column name is used for the ID
-    let idColumnName = 'achievement_id'; // Default assumption
-    try {
-      // Try with achievement_id
-      const { error: error1 } = await supabase
-        .from('achievements')
-        .select('achievement_id')
-        .limit(1);
       
-      if (error1) {
-        // Try with id
-        const { error: error2 } = await supabase
-          .from('achievements')
-          .select('id')
-          .limit(1);
+      if (schemaError) {
+        // Table might not exist, let's create it
+        const createTableSQL = `
+          CREATE TABLE IF NOT EXISTS public.achievements (
+            achievement_id UUID PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            category VARCHAR(50) NOT NULL,
+            difficulty VARCHAR(50) NOT NULL,
+            icon_path VARCHAR(255),
+            points INTEGER NOT NULL,
+            requirements JSONB NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          );
+        `;
         
-        if (!error2) {
-          idColumnName = 'id';
+        // Execute the create table query
+        const { error: createError } = await supabase.rpc('exec_sql', { sql: createTableSQL });
+        
+        if (createError) {
+          console.error('Error creating achievements table:', createError);
+          return res.status(500).json({ 
+            error: 'Error creating achievements table',
+            details: createError.message
+          });
         }
+        
+        console.log('Created achievements table');
       }
     } catch (error) {
-      console.log('Error detecting ID column name', error);
-    }
-
-    console.log(`Using column name '${idColumnName}' as the primary key`);
-
-    // Check if achievements already exist
-    const countQuery = `count(*)`; 
-    const { count: existingCount, error: countError } = await supabase
-      .from('achievements')
-      .select(countQuery, { count: 'exact', head: true });
-
-    if (countError) {
-      console.error('Error counting achievements:', countError);
-      return res.status(500).json({ error: 'Error counting achievements' });
-    }
-
-    if (existingCount && existingCount > 0) {
-      return res.status(200).json({ 
-        message: `Found ${existingCount} existing achievements. No seeding required.`,
-        exists: true,
-        seeded: false,
-        count: existingCount
+      console.error('Error checking/creating achievements table:', error);
+      return res.status(500).json({ 
+        error: 'Error checking/creating achievements table',
+        details: error instanceof Error ? error.message : String(error)
       });
     }
 
-    // Seed the achievements using the correct column structure
+    // Check if achievements already exist
+    const { data: existingAchievements, error: countError } = await supabase
+      .from('achievements')
+      .select('achievement_id, title')
+      .limit(1);
+
+    const existingCount = existingAchievements?.length || 0;
+
+    // Prepare achievements to insert with proper UUIDs
     const achievementsToInsert = ACHIEVEMENT_DEFINITIONS.map(def => {
-      // Create base object
-      const achievementData: any = {
+      return {
+        achievement_id: stringToUUID(def.key),
         title: def.title,
         description: def.description,
         category: def.category,
         difficulty: def.difficulty,
+        icon_path: def.icon,
         points: def.points,
-        requirements: def.requirements
+        requirements: def.requirements,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
+    });
 
-      // For icon column name handling - check options
-      if (idColumnName === 'achievement_id') {
-        // If we're using achievement_id, icon field might be icon_path
-        achievementData.icon_path = def.icon;
-      } else {
-        // Otherwise try both
-        achievementData.icon = def.icon;
-        achievementData.icon_path = def.icon;
+    // If some achievements exist, we'll update them instead of inserting
+    if (existingCount > 0) {
+      // For each achievement, update it if it exists
+      const results = await Promise.all(achievementsToInsert.map(async (achievement) => {
+        const { data, error } = await supabase
+          .from('achievements')
+          .upsert(achievement, { 
+            onConflict: 'achievement_id',
+            ignoreDuplicates: false 
+          })
+          .select('achievement_id, title');
+        
+        return { achievement: achievement.title, success: !error, error };
+      }));
+      
+      return res.status(200).json({
+        message: `Updated ${results.filter(r => r.success).length} achievements`,
+        updated: true,
+        results
+      });
+    } else {
+      // If no achievements exist, insert them all at once
+      const { data, error } = await supabase
+        .from('achievements')
+        .insert(achievementsToInsert)
+        .select('achievement_id, title');
+
+      if (error) {
+        console.error('Error seeding achievements:', error);
+        return res.status(500).json({ 
+          error: 'Error seeding achievements', 
+          details: error.message
+        });
       }
 
-      return achievementData;
-    });
-
-    const { data, error } = await supabase
-      .from('achievements')
-      .insert(achievementsToInsert)
-      .select();
-
-    if (error) {
-      console.error('Error seeding achievements:', error);
-      return res.status(500).json({ 
-        error: 'Error seeding achievements', 
-        details: error.message,
-        // Remove the query property or use a safe access pattern
-        ...(typeof error === 'object' && error !== null && 'query' in error 
-          ? { query: (error as any).query } 
-          : {})
+      return res.status(200).json({
+        message: `Successfully seeded ${data.length} achievements`,
+        seeded: true,
+        count: data.length
       });
     }
-
-    return res.status(200).json({
-      message: `Successfully seeded ${data.length} achievements`,
-      exists: true,
-      seeded: true,
-      count: data.length,
-      idColumnName,
-      details: data.map(a => ({
-        title: a.title,
-        id: a[idColumnName]
-      }))
-    });
   } catch (error: any) {
     console.error('Error in seed achievements API:', error);
     return res.status(500).json({ 

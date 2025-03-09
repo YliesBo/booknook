@@ -33,15 +33,20 @@ export interface Achievement {
 
 // Helper function to generate a UUID from a string
 export function stringToUUID(str: string): string {
-  // This is a simple deterministic UUID generator based on a string
-  // For production, consider using a proper UUID library
+  // Create a more robust deterministic UUID from string
   const hash = Array.from(str)
-    .reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) & 0xffffffff, 0)
-    .toString(16);
+    .reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) & 0xffffffff, 0);
   
-  return `${hash.padStart(8, '0')}-${hash.substring(0, 4)}-4${hash.substring(4, 7)}-${
-    (parseInt(hash.substring(0, 2), 16) & 0x3f | 0x80).toString(16)
-  }${hash.substring(7, 9)}-${hash.substring(9, 21).padEnd(12, '0')}`;
+  // Create parts of the UUID with proper lengths and formats
+  const part1 = hash.toString(16).padStart(8, '0').substring(0, 8);
+  const part2 = hash.toString(16).padStart(8, '0').substring(0, 4);
+  // Use version 4 (random) UUID format by setting the high bits to 4
+  const part3 = `4${hash.toString(16).padStart(8, '0').substring(0, 3)}`;
+  // Use variant 1 (RFC4122) by setting the high bit to 8, 9, a, or b
+  const part4 = ((hash >> 16) & 0x3fff | 0x8000).toString(16).substring(0, 4);
+  const part5 = hash.toString(16).padStart(12, '0').substring(0, 12);
+  
+  return `${part1}-${part2}-${part3}-${part4}-${part5}`;
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
